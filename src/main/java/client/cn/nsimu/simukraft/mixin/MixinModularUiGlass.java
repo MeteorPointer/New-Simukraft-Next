@@ -30,7 +30,7 @@ public abstract class MixinModularUiGlass {
     /**
      * simukraft$applyGlassBackground: 绘制前替换本模组面板底色。
      */
-    @Inject(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lcom/lowdragmc/lowdraglib2/gui/ui/UIElement;drawInBackground(Lcom/lowdragmc/lowdraglib2/gui/ui/rendering/GUIContext;)V"))
+    @Inject(method = "extractRenderState", at = @At(value = "INVOKE", target = "Lcom/lowdragmc/lowdraglib2/gui/ui/UIElement;drawInBackground(Lcom/lowdragmc/lowdraglib2/gui/ui/rendering/IGUIContext;)V"))
     private void simukraft$applyGlassBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo callbackInfo) {
         if (!SimuKraftGlassTextures.enabled()) {
             return;

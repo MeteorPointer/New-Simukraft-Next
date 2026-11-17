@@ -6,6 +6,7 @@ import client.cn.nsimu.simukraft.client.buildbox.BuildBoxScreenOpener;
 import client.cn.nsimu.simukraft.client.buildbox.BuildingBoundsRenderer;
 import client.cn.nsimu.simukraft.client.buildbox.BuildingCacheService;
 import client.cn.nsimu.simukraft.client.buildbox.PlannerMaterialSelectionScreenOpener;
+import client.cn.nsimu.simukraft.client.buildbox.PlannerOperationScreenOpener;
 import client.cn.nsimu.simukraft.client.citizen.CityCitizenManageScreen;
 import client.cn.nsimu.simukraft.client.city.CityCoreScreenOpener;
 import client.cn.nsimu.simukraft.client.city.ClientCityChunkCache;
@@ -109,6 +110,11 @@ public final class ClientboundNetworkHandlerImpl implements ClientboundNetworkHa
     @Override
     public void handleRtsConstructionPreviewSync(RtsConstructionPreviewSyncPacket packet) {
         RtsConstructionPreviewManager.apply(packet.entries());
+    }
+
+    @Override
+    public void handleBuildingBoundsPreviewSync(common.cn.nsimu.simukraft.network.building.controlbox.BuildingBoundsPreviewSyncPacket packet) {
+        BuildingBoundsRenderer.applyPreviewIdentity(packet);
     }
 
     @Override
@@ -270,6 +276,10 @@ public final class ClientboundNetworkHandlerImpl implements ClientboundNetworkHa
 
     @Override
     public void handlePlannerMaterialScanResponse(PlannerMaterialScanResponsePacket packet) {
+        if (!packet.accepted()) {
+            PlannerOperationScreenOpener.open(packet.buildBoxPos());
+            return;
+        }
         PlannerMaterialSelectionScreenOpener.open(packet);
     }
 

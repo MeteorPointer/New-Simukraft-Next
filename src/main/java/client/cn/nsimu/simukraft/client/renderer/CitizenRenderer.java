@@ -1,5 +1,6 @@
 package client.cn.nsimu.simukraft.client.renderer;
 
+import client.cn.nsimu.simukraft.client.ClientFontSelection;
 import com.mojang.blaze3d.vertex.PoseStack;
 import common.cn.nsimu.simukraft.SimuKraft;
 import common.cn.nsimu.simukraft.entity.CitizenEntity;
@@ -138,7 +139,7 @@ public class CitizenRenderer extends MobRenderer<CitizenEntity, CitizenRenderSta
         poseStack.scale(scale, -scale, scale);
         int backgroundColor = (int) (Minecraft.getInstance().gameRenderer.gameRenderState().optionsRenderState.getBackgroundOpacity(0.25F) * 255.0F) << 24;
         submitNodeCollector.submitText(poseStack, x, 0.0F, text, false, seeThrough ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.NORMAL, state.lightCoords, argbColor, backgroundColor, 0);
-        if (seeThrough) {
+        if (seeThrough && !ClientFontSelection.isCustomFont()) {
             submitNodeCollector.submitText(poseStack, x, 0.0F, text, false, Font.DisplayMode.NORMAL, state.lightCoords, argbColor, 0, 0);
         }
         poseStack.popPose();

@@ -1,6 +1,7 @@
 package client.cn.nsimu.simukraft.client.logistics;
 
 import client.cn.nsimu.simukraft.client.toast.ClientInfoToast;
+import client.cn.nsimu.simukraft.client.ui.SimuKraftGlassTextures;
 import common.cn.nsimu.simukraft.logistics.LogisticsChannelFilterMode;
 import common.cn.nsimu.simukraft.logistics.LogisticsControlBoxService;
 import common.cn.nsimu.simukraft.logistics.LogisticsDirection;
@@ -80,6 +81,7 @@ public final class LogisticsChannelCreateScreenOpener {
          */
         @Override
         public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            SimuKraftGlassTextures.captureBackdrop();
             LogisticsNativeStyle.drawDenseBackdrop(graphics, this.width, this.height);
         }
 

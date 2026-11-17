@@ -1,6 +1,8 @@
 package client.cn.nsimu.simukraft.client.buildbox;
 
 import client.cn.nsimu.simukraft.client.city.ClientCityChunkCache;
+import common.cn.nsimu.simukraft.network.building.controlbox.BuildingBoundsPreviewRequestPacket;
+import common.cn.nsimu.simukraft.network.building.controlbox.BuildingBoundsPreviewSyncPacket;
 import client.cn.nsimu.simukraft.client.rts.RtsConstructionPreviewManager;
 import client.cn.nsimu.simukraft.client.rts.RtsMovePreviewManager;
 import client.cn.nsimu.simukraft.client.rts.RtsSelectionManager;
@@ -22,6 +24,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.util.List;
 import java.util.Map;
@@ -117,6 +120,16 @@ public final class BuildingBoundsRenderer {
             return;
         }
         putDisplayed(controlBoxPos, bounds, markers, next);
+        if (next == BuildingBoundsMode.PREVIEW) {
+            ClientPacketDistributor.sendToServer(new BuildingBoundsPreviewRequestPacket(controlBoxPos.immutable()));
+        }
+    }
+
+    /**
+     * applyPreviewIdentity: 用服务端建筑身份重建当前控制盒的预览网格。
+     */
+    public static void applyPreviewIdentity(BuildingBoundsPreviewSyncPacket packet) {
+        BuildingBoundsPreview.applyIdentity(packet);
     }
 
     public static void setBuildingBoundsVisible(BlockPos controlBoxPos, AABB bounds, boolean visible) {

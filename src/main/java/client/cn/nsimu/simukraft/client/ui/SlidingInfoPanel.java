@@ -52,6 +52,9 @@ public final class SlidingInfoPanel {
         float slideTarget = visible ? 1.0f : 0.0f;
         float delta = slideTarget - slideProgress;
         slideProgress = Math.abs(delta) > 0.004f ? slideProgress + delta * 0.2f : slideTarget;
+        if (SimuKraftGlassTextures.enabled()) {
+            SimuKraftGlassTextures.captureBackdrop();
+        }
         panelX = screenW - (int) (slideProgress * (panelW + 6));
         innerX = panelX + 8;
         // 拉片
@@ -60,6 +63,10 @@ public final class SlidingInfoPanel {
         g.fill(tabX, tabY, tabX + 12, tabY + 1, 0x44AAAACC);
         g.fill(tabX, tabY, tabX + 1, tabY + 16, 0x44AAAACC);
         g.centeredText(font, Component.literal(visible ? "▶" : "◀"), tabX + 6, tabY + 4, 0xFF8888AA);
+        if (SimuKraftGlassTextures.enabled()) {
+            SimuKraftGlassTextures.fill(g, panelX, panelY, panelW, panelH, 0xAA000000);
+            return;
+        }
         // 面板背景
         g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xAA000000);
         g.fill(panelX, panelY, panelX + panelW, panelY + 1, 0x66AAAACC);

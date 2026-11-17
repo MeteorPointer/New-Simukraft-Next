@@ -1,9 +1,9 @@
-# LDLib2 1.21 使用总结
+# LDLib2 26.3 使用总结
 
 来源：https://low-drag-mc.github.io/LowDragMC-Doc/ldlib2/
 
-适用目标：Minecraft 1.21.x / NeoForge 项目。
-当前目录：`LDLib2-1.21` 是 LDLib2 源码目录，因此本文档单独保存为总结文件，避免覆盖源码。
+适用目标：Minecraft 26.3 / NeoForge 26.3.x 项目（本文最初基于 LDLib2 1.21.x 源码整理，主体内容在当前版本仍适用）。
+当前目录：`LDLib2-1.21` 是当初写入时对应的 LDLib2 源码目录，因此本文档单独保存为总结文件，避免覆盖源码。
 
 ## 1. LDLib2 是什么
 
@@ -81,7 +81,7 @@ dependencies {
 implementation "curse.maven:ldlib-626676:8125765"
 ```
 
-这不等于官方文档中的 LDLib2 Maven 坐标。如果后续明确要使用 LDLib2 API，应改为官方 Maven 依赖，并确认版本号是否支持 Minecraft 1.21.1 / NeoForge 21.1.x。
+这不等于官方文档中的 LDLib2 Maven 坐标。如果后续明确要使用 LDLib2 API，应改为官方 Maven 依赖，并确认版本号是否支持 Minecraft 26.3 / NeoForge 26.3.x。
 
 ## 4. 推荐 IDEA 插件
 

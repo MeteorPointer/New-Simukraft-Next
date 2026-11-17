@@ -6,8 +6,9 @@ New:Sim-U-Kraft is a city-building and NPC life simulation mod for Minecraft. It
 found a city, claim land, place buildings, hire citizens, and turn a simple settlement into
 a working town with construction, farming, commerce, industry, and logistics.
 
-The mod is available for **Minecraft 1.21.1 on NeoForge** and also supports
-**Minecraft 1.20.1 on Forge**.
+The mod is available for **Minecraft 26.3 on NeoForge** (NEXT version).
+A stable **Minecraft 1.21.1 on NeoForge** build and a legacy
+**Minecraft 1.20.1 on Forge** build are also maintained.
 
 ![Available for NeoForge](https://img.shields.io/badge/Available%20for-NeoForge-f16436?style=for-the-badge)
 ![Available for Forge](https://img.shields.io/badge/Available%20for-Forge-f16436?style=for-the-badge)
@@ -15,7 +16,8 @@ The mod is available for **Minecraft 1.21.1 on NeoForge** and also supports
 ## Installation Guide
 
 Download the file that matches your Minecraft version and mod loader. Use the **NeoForge**
-build for Minecraft **1.21.1**, or the **Forge** build for Minecraft **1.20.1**.
+build for Minecraft **26.3** (frontier) or **1.21.1** (stable), or the **Forge** build for
+Minecraft **1.20.1** (legacy).
 
 Once the correct loader is installed, place New: Sim-U-Kraft into your `mods` folder. You
 also need the matching version of **LDLib / LDLib2** for your Minecraft version.

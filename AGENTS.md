@@ -6,11 +6,11 @@
 4. 稳定调用入口以 [docs/面向模组开发者/接口用法.md](docs/面向模组开发者/接口用法.md) 为准。
 5. 初期开发已经结束，不再维护进度和计划文档。
 6. 改模组时说明为什么这样改，以及它靠哪一层保证正确。
-7. API 不确定时先查 NeoForge 1.21.1 对应文档，再用本仓库里已经在用的写法。
+7. API 不确定时先查 NeoForge 26.3 对应文档，再用本仓库里已经在用的写法。
 
 ## 工程
 
-1. 目标版本是 Minecraft 1.21.1、NeoForge 21.1.x、Java 21。
+1. 目标版本是 Minecraft 26.3、NeoForge 26.3.x、Java 25。本分支为前沿线（Crest），只做 API 适配，不改玩法；玩法基线在稳定线 main 分支（MC 1.21.1，Cornerstone）。
 2. 界面用 LDLib2。
 3. 长期数据用 SQLite。
 4. 模组 id 是 `simukraft`。

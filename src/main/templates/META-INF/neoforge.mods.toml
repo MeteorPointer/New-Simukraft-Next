@@ -43,7 +43,7 @@ bannerFile="banner.png" #optional
 #credits="" #optional
 
 # The authors of the mod, displayed in the mod UI (optional)
-authors="NSUK Studio"
+authors="MeteorPointer"
 
 # The description text for the mod (multi line!) (#mandatory)
 description='''

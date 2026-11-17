@@ -10,8 +10,6 @@ import com.lowdragmc.lowdraglib2.gui.ui.elements.SearchComponent;
 import com.lowdragmc.lowdraglib2.gui.ui.utils.UIElementProvider;
 import com.lowdragmc.lowdraglib2.utils.search.IResultHandler;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -24,7 +22,6 @@ import java.util.UUID;
 /**
  * SimuKraftNameSearch: 用 LDLib2 SearchComponent 补全城市名或玩家名，不依赖方块注册表。
  */
-@OnlyIn(Dist.CLIENT)
 public final class SimuKraftNameSearch {
     public static final int MAX_RESULTS = 12;
 

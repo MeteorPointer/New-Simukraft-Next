@@ -1,9 +1,9 @@
 package client.cn.nsimu.simukraft.mixin;
 
 import client.cn.nsimu.simukraft.client.ui.SimuKraftGlassTextures;
-import com.lowdragmc.lowdraglib2.gui.ui.Style;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUIWidget;
+import com.lowdragmc.lowdraglib2.gui.ui.Style;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import com.lowdragmc.lowdraglib2.gui.ui.elements.Label;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

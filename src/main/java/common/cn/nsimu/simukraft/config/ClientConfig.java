@@ -219,7 +219,9 @@ public final class ClientConfig {
         return isGlassColor(value) ? Integer.parseInt(value.substring(1), 16) : 0x101828;
     }
 
-    /** fontName: 返回规范化的客户端字体名称。 */
+    /**
+     * fontName: 返回规范化的客户端字体名称。
+     */
     public static String fontName() {
         String value = FONT.get();
         return isFont(value) ? value.toLowerCase(Locale.ROOT) : DEFAULT_FONT;
@@ -334,7 +336,9 @@ public final class ClientConfig {
         };
     }
 
-    /** isGlassColor: 校验 #RRGGBB 色值。 */
+    /**
+     * isGlassColor: 校验 #RRGGBB 色值。
+     */
     private static boolean isGlassColor(Object value) {
         if (!(value instanceof String string) || string.length() != 7 || string.charAt(0) != '#') {
             return false;
@@ -351,7 +355,9 @@ public final class ClientConfig {
         return true;
     }
 
-    /** isFont: 校验字体配置值。 */
+    /**
+     * isFont: 校验字体配置值。
+     */
     private static boolean isFont(Object value) {
         if (!(value instanceof String string) || string.isBlank()) return false;
         return switch (string.toLowerCase(Locale.ROOT)) {

@@ -1,10 +1,6 @@
 package client.cn.nsimu.simukraft.client.ui;
 
-import com.lowdragmc.lowdraglib2.gui.texture.ColorRectTexture;
-import com.lowdragmc.lowdraglib2.gui.texture.GuiTextureGroup;
-import com.lowdragmc.lowdraglib2.gui.texture.IGuiTexture;
-import com.lowdragmc.lowdraglib2.gui.texture.SDFRectTexture;
-import com.lowdragmc.lowdraglib2.gui.texture.SpriteTexture;
+import com.lowdragmc.lowdraglib2.gui.texture.*;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import common.cn.nsimu.simukraft.config.ClientConfig;
 import net.minecraft.client.gui.GuiGraphicsExtractor;

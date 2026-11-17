@@ -1,8 +1,8 @@
 package client.cn.nsimu.simukraft.client.logistics;
 
 import client.cn.nsimu.simukraft.client.hire.NpcHireScreen;
-import client.cn.nsimu.simukraft.client.ui.SimuKraftGlassTextures;
 import client.cn.nsimu.simukraft.client.selection.TwoPointSelectionScreen;
+import client.cn.nsimu.simukraft.client.ui.SimuKraftGlassTextures;
 import common.cn.nsimu.simukraft.logistics.LogisticsConstants;
 import common.cn.nsimu.simukraft.logistics.LogisticsControlBoxService;
 import common.cn.nsimu.simukraft.logistics.LogisticsDirection;

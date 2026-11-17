@@ -1,7 +1,7 @@
 package client.cn.nsimu.simukraft.client.config;
 
-import client.cn.nsimu.simukraft.client.ClientHUDOverlay;
 import client.cn.nsimu.simukraft.client.ClientFontSelection;
+import client.cn.nsimu.simukraft.client.ClientHUDOverlay;
 import com.lowdragmc.lowdraglib2.gui.holder.ModularUIScreen;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
 import common.cn.nsimu.simukraft.config.ClientConfig;
@@ -86,7 +86,9 @@ public final class SimuKraftClientConfigScreen {
         return footer;
     }
 
-    /** fontRow: 提供全客户端字体循环选择，英语环境额外显示 Beautiful ES。 */
+    /**
+     * fontRow: 提供全客户端字体循环选择，英语环境额外显示 Beautiful ES。
+     */
     private static UIElement fontRow(Screen parent) {
         return SimuKraftConfigWidgets.row(
                 Component.translatable("gui.simukraft.config.client.font"),

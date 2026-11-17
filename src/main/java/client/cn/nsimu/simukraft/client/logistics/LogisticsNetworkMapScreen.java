@@ -1,9 +1,9 @@
 package client.cn.nsimu.simukraft.client.logistics;
 
 import client.cn.nsimu.simukraft.client.city.map.SimuMapManager;
-import client.cn.nsimu.simukraft.client.ui.SimuKraftGlassTextures;
 import client.cn.nsimu.simukraft.client.city.map.SimuMapRegion;
 import client.cn.nsimu.simukraft.client.toast.ClientInfoToast;
+import client.cn.nsimu.simukraft.client.ui.SimuKraftGlassTextures;
 import common.cn.nsimu.simukraft.logistics.LogisticsControlBoxService;
 import common.cn.nsimu.simukraft.logistics.LogisticsDirection;
 import common.cn.nsimu.simukraft.network.logistics.LogisticsBoxActionPacket;

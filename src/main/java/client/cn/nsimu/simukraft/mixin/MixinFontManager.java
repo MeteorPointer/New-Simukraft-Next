@@ -13,12 +13,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Map;
 
-/** 将 Minecraft 的默认字体请求切换到客户端配置选择的字体资源。 */
+/**
+ * 将 Minecraft 的默认字体请求切换到客户端配置选择的字体资源。
+ */
 @Mixin(FontManager.class)
 public abstract class MixinFontManager {
-    @Shadow @Final private Map<Identifier, FontSet> fontSets;
+    @Shadow
+    @Final
+    private Map<Identifier, FontSet> fontSets;
 
-    /** simukraft$selectConfiguredFont: 替换默认字体资源，其他自定义字体保持原样。 */
+    /**
+     * simukraft$selectConfiguredFont: 替换默认字体资源，其他自定义字体保持原样。
+     */
     @Inject(method = "getFontSetRaw", at = @At("HEAD"), cancellable = true)
     private void simukraft$selectConfiguredFont(Identifier id, CallbackInfoReturnable<FontSet> cir) {
         if (id.equals(Identifier.withDefaultNamespace("default"))) {

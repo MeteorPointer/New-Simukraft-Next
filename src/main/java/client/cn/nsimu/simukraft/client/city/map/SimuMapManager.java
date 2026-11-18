@@ -37,6 +37,24 @@ public class SimuMapManager {
     // 区块加载改为限流补采：避免进入世界时成批区块在主线程同步全量采样导致严重卡顿。
     private static final int CHUNK_LOAD_SCAN_BUDGET_PER_TICK = 4;
     private static final int MAX_PENDING_CHUNK_SCANS = 4096;
+    /** 每拍最多提交几个脏 region 给后台烘图，旧实现一次性把全部脏 region 灌进无界队列。 */
+    private static final int REGION_BAKE_BUDGET_PER_TICK = 2;
+    private static final int MAX_REGION_BAKES_IN_FLIGHT = 6;
+    /** 一次绘制窗口内允许同步上传的 region 纹理数，剩下的帧继续用旧纹理。 */
+    private static final int TEXTURE_UPLOAD_BUDGET_PER_FRAME = 2;
+    /** 磁盘 region 按需加载的并发上限，每个文件是 512x512 的地形数据。 */
+    private static final int MAX_REGION_LOADS_IN_FLIGHT = 3;
+    private static final int REGION_LIST_REFRESH_TICKS = 1200;
+    /**
+     * 常驻 region 上限。一个 region 的三个数组约 2MB，长期跑图不能只增不减。
+     */
+    private static final int MAX_RESIDENT_REGIONS = 128;
+    private static final long EVICT_MIN_AGE_MS = 120_000L;
+    private static final int EVICT_MIN_DISTANCE_BLOCKS = 4096;
+    /**
+     * 视口补载每次最多扫的 region 边长。
+     */
+    private static final int MAX_VIEW_REGION_SPAN = 32;
 
     private static SimuMapManager instance;
 
@@ -52,6 +70,10 @@ public class SimuMapManager {
     // 待补采区块队列（打包坐标），仅由每拍限流消费，用并发容器兜住区块加载与 tick 的时序。
     private final Queue<Long> pendingChunkScans = new ConcurrentLinkedQueue<>();
     private final Set<Long> pendingChunkKeys = ConcurrentHashMap.newKeySet();
+    // 磁盘缓存里已有的 region 键，只列目录不读数据；旧实现进世界时把全部 region 一次性读进内存。
+    private volatile Set<Long> availableRegionKeys = Set.of();
+    private final Set<Long> loadingRegionKeys = ConcurrentHashMap.newKeySet();
+    private volatile long regionListTick = Long.MIN_VALUE;
 
     private int scanRadius = DEFAULT_SCAN_RADIUS;
     private long tickCount = 0L;
@@ -70,6 +92,17 @@ public class SimuMapManager {
     private volatile String currentWorldId = null;
 
     private int activeConsumers = 0;
+
+    /**
+     * 本帧还能同步上传几个 region 纹理，只在渲染线程读写。
+     */
+    private int uploadWindowRemaining = 0;
+
+    /**
+     * 脏区烘图排序焦点（世界坐标）。地图界面远程看别处时不能按玩家位置排队。
+     */
+    private volatile double bakeFocusX = Double.NaN;
+    private volatile double bakeFocusZ = Double.NaN;
 
     private SimuMapManager() {
     }
@@ -97,6 +130,34 @@ public class SimuMapManager {
 
     public void releaseConsumer() {
         activeConsumers = Math.max(0, activeConsumers - 1);
+        if (activeConsumers == 0) {
+            bakeFocusX = Double.NaN;
+            bakeFocusZ = Double.NaN;
+        }
+    }
+
+    /**
+     * setBakeFocus: 地图界面把视口中心告知这里，脏区烘图按它排序。
+     */
+    public void setBakeFocus(double blockX, double blockZ) {
+        bakeFocusX = blockX;
+        bakeFocusZ = blockZ;
+    }
+
+    /**
+     * bakeFocusDistanceSquared: region 到排序焦点的距离平方，没设焦点时回到玩家位置。
+     */
+    private double bakeFocusDistanceSquared(SimuMapRegion region) {
+        double focusX = bakeFocusX;
+        double focusZ = bakeFocusZ;
+        if (Double.isNaN(focusX) || Double.isNaN(focusZ)) {
+            return region.distToPlayer();
+        }
+        double centerX = region.regionX * 512.0 + 256.0;
+        double centerZ = region.regionZ * 512.0 + 256.0;
+        double dx = centerX - focusX;
+        double dz = centerZ - focusZ;
+        return dx * dx + dz * dz;
     }
 
     public boolean hasActiveConsumer() {
@@ -117,7 +178,7 @@ public class SimuMapManager {
         currentDimension = minecraft.level == null ? null : minecraft.level.dimension();
 
         if (currentDimension != null && SimuMapStorage.isResolvedWorldId(currentWorldId)) {
-            queueRegionLoad(currentWorldId, currentDimension);
+            refreshAvailableRegions(currentWorldId, currentDimension);
             LOGGER.info("Simukraft: Map system initialization queued for world={} dim={}.",
                     currentWorldId, SimuMapStorage.dimensionToDir(currentDimension));
         } else {
@@ -163,6 +224,7 @@ public class SimuMapManager {
         scannedAtTick.clear();
         pendingChunkScans.clear();
         pendingChunkKeys.clear();
+        clearRegionScopeCache();
         renderExecutor.shutdownNow();
 
         instance = null;
@@ -198,6 +260,7 @@ public class SimuMapManager {
 
         tickCount++;
         boolean active = hasActiveConsumer();
+        tickRegionScope(player);
 
         if (shouldScanThisTick(active)) {
             incrementalScan(active ? ACTIVE_SCAN_BUDGET : PASSIVE_SCAN_BUDGET);
@@ -280,7 +343,8 @@ public class SimuMapManager {
 
     // queueChunkScan: 记录待补采区块；超上限直接丢弃，螺旋增量扫描仍能兜底覆盖。
     private void queueChunkScan(int chunkX, int chunkZ) {
-        if (pendingChunkScans.size() >= MAX_PENDING_CHUNK_SCANS) {
+        // 上限判据用去重集合的规模，ConcurrentHashMap.size() 是 O(1)，不能每次扫链表。
+        if (pendingChunkKeys.size() >= MAX_PENDING_CHUNK_SCANS) {
             return;
         }
         long packed = ChunkPos.pack(chunkX, chunkZ);
@@ -334,6 +398,7 @@ public class SimuMapManager {
                 scannedAtTick.clear();
                 pendingChunkScans.clear();
                 pendingChunkKeys.clear();
+                clearRegionScopeCache();
                 resetScanCursor();
             }
         } else if (previousDimension == null) {
@@ -343,7 +408,7 @@ public class SimuMapManager {
         currentWorldId = worldId;
         currentDimension = dimension;
         if (SimuMapStorage.isResolvedWorldId(worldId)) {
-            queueRegionLoad(worldId, dimension);
+            refreshAvailableRegions(worldId, dimension);
         }
     }
 
@@ -459,11 +524,32 @@ public class SimuMapManager {
     }
 
     private void renderDirtyRegions() {
-        for (Map.Entry<Long, SimuMapRegion> entry : regions.entrySet()) {
-            long key = entry.getKey();
-            SimuMapRegion region = entry.getValue();
-            SimuMapRegionData data = region.getData();
-            if (data == null || !data.isDirty() || !renderingKeys.add(key)) {
+        int inFlight = MAX_REGION_BAKES_IN_FLIGHT - renderingKeys.size();
+        if (inFlight <= 0) {
+            return;
+        }
+
+        List<SimuMapRegion> dirty = new ArrayList<>();
+        for (SimuMapRegion region : regions.values()) {
+            // peekData 不刷新访问时间，否则每拍查脏会把闲置 region 一直钉在常驻集里。
+            SimuMapRegionData data = region.peekData();
+            if (data != null && data.isDirty()) {
+                dirty.add(region);
+            }
+        }
+        if (dirty.isEmpty()) {
+            return;
+        }
+
+        int budget = Math.min(REGION_BAKE_BUDGET_PER_TICK, inFlight);
+        if (dirty.size() > budget) {
+            // 先烘排序焦点附近的，远处的留下一拍，避免整片脏区挤满后台队列。
+            dirty.sort(Comparator.comparingDouble(this::bakeFocusDistanceSquared));
+        }
+        for (int index = 0; index < dirty.size() && index < budget; index++) {
+            SimuMapRegion region = dirty.get(index);
+            long key = regionKey(region.regionX, region.regionZ);
+            if (!renderingKeys.add(key)) {
                 continue;
             }
 
@@ -487,7 +573,7 @@ public class SimuMapManager {
                 return false;
             }
 
-            SimuMapRegionData data = region.getData();
+            SimuMapRegionData data = region.peekData();
             if (data == null && !region.isImageLoaded()) {
                 return true;
             }
@@ -499,6 +585,37 @@ public class SimuMapManager {
             }
             return false;
         });
+        evictOverCapacity();
+    }
+
+    /**
+     * evictOverCapacity: 常驻 region 超上限时，丢掉远处、久未使用且已经落盘的 region。
+     * <p>没落盘的不碰，交给周期缓存写完后下一轮再淘汰；被丢的 region 下次进入扫描范围或视口时按需重读磁盘。
+     */
+    private void evictOverCapacity() {
+        int excess = regions.size() - MAX_RESIDENT_REGIONS;
+        if (excess <= 0) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        double minDistanceSquared = (double) EVICT_MIN_DISTANCE_BLOCKS * EVICT_MIN_DISTANCE_BLOCKS;
+        Iterator<Map.Entry<Long, SimuMapRegion>> iterator = regions.entrySet().iterator();
+        while (iterator.hasNext() && excess > 0) {
+            Map.Entry<Long, SimuMapRegion> entry = iterator.next();
+            SimuMapRegion region = entry.getValue();
+            SimuMapRegionData data = region.peekData();
+            if (data == null || data.needsSave()
+                    || now - region.getLastAccessTime() < EVICT_MIN_AGE_MS
+                    || region.distToPlayer() < minDistanceSquared) {
+                continue;
+            }
+            region.releaseTexture();
+            region.discardData();
+            iterator.remove();
+            scannedAtTick.keySet().removeIf(chunkKey ->
+                    ChunkPos.getX(chunkKey) >> 5 == region.regionX && ChunkPos.getZ(chunkKey) >> 5 == region.regionZ);
+            excess--;
+        }
     }
 
     private void persistRegionsAsync(@Nullable String worldId, @Nullable ResourceKey<Level> dimension,
@@ -521,27 +638,163 @@ public class SimuMapManager {
         }
     }
 
-    private void queueRegionLoad(String worldId, ResourceKey<Level> dimension) {
+    /**
+     * refreshAvailableRegions: 只列一次目录，拿到磁盘上已有的 region 键；地形数据按需加载。
+     * <p>旧实现进世界就把全部 region 读进内存，存档探索得越大，加入世界的 IO 和堆压力越离谱。
+     */
+    private void refreshAvailableRegions(@Nullable String worldId, @Nullable ResourceKey<Level> dimension) {
         if (!SimuMapStorage.isResolvedWorldId(worldId) || dimension == null) {
             return;
         }
-        int currentLoadGeneration = ++loadGeneration;
-        SimuMapStorage.loadAllAsync(worldId, dimension, loadedRegions -> {
-            Minecraft.getInstance().execute(() -> {
-                if (!initialized || currentLoadGeneration != loadGeneration) {
-                    return;
-                }
-                if (!worldId.equals(currentWorldId) || currentDimension == null || !currentDimension.equals(dimension)) {
-                    return;
-                }
+        int scopeGeneration = loadGeneration;
+        regionListTick = tickCount;
+        SimuMapStorage.listRegionsAsync(worldId, dimension, keys -> Minecraft.getInstance().execute(() -> {
+            if (!initialized || scopeGeneration != loadGeneration
+                    || !Objects.equals(worldId, currentWorldId) || !Objects.equals(dimension, currentDimension)) {
+                return;
+            }
+            availableRegionKeys = keys;
+            LOGGER.info("Simukraft: Found {} cached map regions for world={} dim={}.",
+                    keys.size(), worldId, SimuMapStorage.dimensionToDir(dimension));
+        }));
+    }
 
-                loadedRegions.forEach(regions::putIfAbsent);
-                LOGGER.info("Simukraft: Async-loaded {} regions for world={} dim={}.",
-                        loadedRegions.size(), worldId, SimuMapStorage.dimensionToDir(dimension));
+    /**
+     * tickRegionScope: 目录到期重列，并补载玩家扫描范围内已经存在的磁盘 region。
+     */
+    private void tickRegionScope(LocalPlayer player) {
+        if (regionListTick != Long.MIN_VALUE && tickCount - regionListTick >= REGION_LIST_REFRESH_TICKS) {
+            refreshAvailableRegions(currentWorldId, currentDimension);
+        }
+        int chunkX = player.chunkPosition().x();
+        int chunkZ = player.chunkPosition().z();
+        int radius = getEffectiveScanRadius();
+        requestRegionLoads((chunkX - radius) >> 5, (chunkX + radius) >> 5, (chunkZ - radius) >> 5, (chunkZ + radius) >> 5);
+    }
+
+    /**
+     * requestRegionsInView: 地图界面把视口内的世界坐标矩形告知这里，缺的 region 按需从磁盘补载。
+     * <p>每轴最多 32 个 region，超出部分不补，避免缩到极远时每帧扫几万格。
+     */
+    public void requestRegionsInView(int minBlockX, int maxBlockX, int minBlockZ, int maxBlockZ) {
+        int minRegionX = minBlockX >> 9;
+        int maxRegionX = maxBlockX >> 9;
+        int minRegionZ = minBlockZ >> 9;
+        int maxRegionZ = maxBlockZ >> 9;
+        int centerRegionX = Math.floorDiv(minRegionX + maxRegionX, 2);
+        int centerRegionZ = Math.floorDiv(minRegionZ + maxRegionZ, 2);
+        int halfSpan = MAX_VIEW_REGION_SPAN / 2;
+        requestRegionLoads(Math.max(minRegionX, centerRegionX - halfSpan),
+                Math.min(maxRegionX, centerRegionX + halfSpan),
+                Math.max(minRegionZ, centerRegionZ - halfSpan),
+                Math.min(maxRegionZ, centerRegionZ + halfSpan));
+    }
+
+    private void requestRegionLoads(int minRegionX, int maxRegionX, int minRegionZ, int maxRegionZ) {
+        String worldId = currentWorldId;
+        ResourceKey<Level> dimension = currentDimension;
+        if (!SimuMapStorage.isResolvedWorldId(worldId) || dimension == null) {
+            return;
+        }
+        Set<Long> available = availableRegionKeys;
+        if (available.isEmpty()) {
+            return;
+        }
+        for (int regionZ = minRegionZ; regionZ <= maxRegionZ; regionZ++) {
+            for (int regionX = minRegionX; regionX <= maxRegionX; regionX++) {
+                long key = regionKey(regionX, regionZ);
+                if (!available.contains(key)) {
+                    continue;
+                }
+                SimuMapRegion resident = regions.get(key);
+                if (resident != null) {
+                    SimuMapRegionData residentData = resident.peekData();
+                    // 已经采满的块不需要再读磁盘，否则跑图时每拍都会白读 2MB 文件。
+                    if (residentData == null || residentData.isFullySampled()) {
+                        continue;
+                    }
+                }
+                // 满了就不再拉，等这拍淘汰出手位；请求下个 tick 或下一帧还会再来。
+                if (regions.size() >= MAX_RESIDENT_REGIONS || loadingRegionKeys.size() >= MAX_REGION_LOADS_IN_FLIGHT) {
+                    return;
+                }
+                if (loadingRegionKeys.add(key)) {
+                    loadRegionFromFile(worldId, dimension, regionX, regionZ);
+                }
+            }
+        }
+    }
+
+    private void loadRegionFromFile(String worldId, ResourceKey<Level> dimension, int regionX, int regionZ) {
+        long key = regionKey(regionX, regionZ);
+        int scopeGeneration = loadGeneration;
+        SimuMapStorage.loadRegionAsync(worldId, dimension, regionX, regionZ, loaded -> {
+            Minecraft.getInstance().execute(() -> {
+                loadingRegionKeys.remove(key);
+                if (!initialized || scopeGeneration != loadGeneration || loaded == null) {
+                    return;
+                }
+                applyLoadedRegion(regionX, regionZ, loaded);
             });
         });
     }
 
+    /**
+     * applyLoadedRegion: 磁盘数据落地。扫描已经先把该 region 建过时只填还未知的格子，
+     * 不能把玩家刚看到的新地形覆盖成旧快照。
+     * <p>用 compute 保证与扫描里的 computeIfAbsent 互相不会吞掉对方。
+     */
+    private void applyLoadedRegion(int regionX, int regionZ, SimuMapRegionData loaded) {
+        regions.compute(regionKey(regionX, regionZ), (key, existing) -> {
+            if (existing != null) {
+                SimuMapRegionData data = existing.peekData();
+                if (data == null) {
+                    existing.setData(loaded);
+                    loaded.markDirty();
+                } else {
+                    data.mergeUnknownFrom(loaded);
+                }
+                return existing;
+            }
+            SimuMapRegion region = new SimuMapRegion(regionX, regionZ);
+            region.setData(loaded);
+            loaded.markDirty();
+            return region;
+        });
+    }
+
+    /**
+     * clearRegionScopeCache: 切档、切维度和关服时释放目录快照与在途加载。
+     */
+    private void clearRegionScopeCache() {
+        availableRegionKeys = Set.of();
+        loadingRegionKeys.clear();
+        regionListTick = Long.MIN_VALUE;
+        loadGeneration++;
+    }
+
+    /**
+     * beginTextureUploadWindow: 开启一次地图绘制窗口，限制本帧内同步上传的纹理数量。
+     * <p>只在渲染线程调用。
+     */
+    public void beginTextureUploadWindow() {
+        uploadWindowRemaining = TEXTURE_UPLOAD_BUDGET_PER_FRAME;
+    }
+
+    /**
+     * tryAcquireTextureUploadSlot: 取一个本帧上传名额，只在渲染线程调用。
+     */
+    public boolean tryAcquireTextureUploadSlot() {
+        if (uploadWindowRemaining > 0) {
+            uploadWindowRemaining--;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * regionKey: region 坐标到缓存键的打包。
+     */
     private static long regionKey(int regionX, int regionZ) {
         return ((long) regionX << 32) | (regionZ & 0xFFFFFFFFL);
     }

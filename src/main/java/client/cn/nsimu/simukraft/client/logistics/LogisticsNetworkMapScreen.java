@@ -288,22 +288,47 @@ final class LogisticsNetworkMapScreen extends Screen {
         }
         double centerX = startX + width / 2.0D;
         double centerY = startY + height / 2.0D;
+        requestVisibleRegionLoads(startX, startY, width, height, centerX, centerY);
+        mapManager.beginTextureUploadWindow();
+        double regionSize = 512.0D * zoomLevel;
         for (SimuMapRegion region : mapManager.getAllRegions()) {
+            double screenX = centerX + offsetX + region.regionX * 512.0D * zoomLevel;
+            double screenY = centerY + offsetY + region.regionZ * 512.0D * zoomLevel;
+            // 先剔除再取纹理，屏外 region 不该占本帧的上传额度。
+            if (screenX + regionSize < startX || screenX > startX + width
+                    || screenY + regionSize < startY || screenY > startY + height) {
+                continue;
+            }
             if (!region.isImageLoaded() && !region.hasData()) {
                 continue;
             }
-            Identifier textureLocation = region.getTextureLocation();
+            region.touch();
+            Identifier textureLocation = region.getTextureLocation(mapManager.tryAcquireTextureUploadSlot());
             if (textureLocation == null) {
-                continue;
-            }
-            double screenX = centerX + offsetX + region.regionX * 512.0D * zoomLevel;
-            double screenY = centerY + offsetY + region.regionZ * 512.0D * zoomLevel;
-            double regionSize = 512.0D * zoomLevel;
-            if (screenX + regionSize < startX || screenX > startX + width || screenY + regionSize < startY || screenY > startY + height) {
                 continue;
             }
             drawRegionTexture(graphics, textureLocation, screenX, screenY, regionSize);
         }
+    }
+
+    /**
+     * requestVisibleRegionLoads: 把视口世界矩形交给地图管理器按需补载磁盘 region。
+     */
+    private void requestVisibleRegionLoads(int startX, int startY, int width, int height, double centerX, double centerY) {
+        if (zoomLevel <= 0.0D) {
+            return;
+        }
+        double minBlockX = (startX - centerX - offsetX) / zoomLevel;
+        double maxBlockX = (startX + width - centerX - offsetX) / zoomLevel;
+        double minBlockZ = (startY - centerY - offsetY) / zoomLevel;
+        double maxBlockZ = (startY + height - centerY - offsetY) / zoomLevel;
+        mapManager.requestRegionsInView(
+                (int) Math.max(Integer.MIN_VALUE, Math.floor(minBlockX)),
+                (int) Math.min(Integer.MAX_VALUE, Math.ceil(maxBlockX)),
+                (int) Math.max(Integer.MIN_VALUE, Math.floor(minBlockZ)),
+                (int) Math.min(Integer.MAX_VALUE, Math.ceil(maxBlockZ)));
+        // 烘图排序以视口中心为准。
+        mapManager.setBakeFocus((minBlockX + maxBlockX) / 2.0D, (minBlockZ + maxBlockZ) / 2.0D);
     }
 
     /**

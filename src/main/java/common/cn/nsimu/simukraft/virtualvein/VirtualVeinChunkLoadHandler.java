@@ -1,7 +1,6 @@
 package common.cn.nsimu.simukraft.virtualvein;
 
 import common.cn.nsimu.simukraft.SimuKraft;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -10,7 +9,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 
 /**
- * VirtualVeinChunkLoadHandler: 在区块首次服务端加载时建立矿区档案。
+ * VirtualVeinChunkLoadHandler: 在区块首次服务端加载时排队建立矿区档案。
  */
 @EventBusSubscriber(modid = SimuKraft.MOD_ID)
 public final class VirtualVeinChunkLoadHandler {
@@ -18,7 +17,8 @@ public final class VirtualVeinChunkLoadHandler {
     }
 
     /**
-     * onChunkLoad: 初始化当前区块所属的虚拟矿区。
+     * onChunkLoad: 只记录待建档区块，不在本帧采样和读写数据库。
+     * <p>26.3 的 ChunkEvent.Load 仍由主线程成批投递，进世界时一帧可以有上百个区块到达。
      */
     @SubscribeEvent
     public static void onChunkLoad(ChunkEvent.Load event) {
@@ -26,8 +26,6 @@ public final class VirtualVeinChunkLoadHandler {
             return;
         }
         ChunkAccess chunk = event.getChunk();
-        int centerX = chunk.getPos().getMinBlockX() + 8;
-        int centerZ = chunk.getPos().getMinBlockZ() + 8;
-        VirtualVeinService.getOrCreateField(level, new BlockPos(centerX, level.getSeaLevel(), centerZ));
+        VirtualVeinService.enqueueFieldInitChunk(level, chunk.getPos());
     }
 }

@@ -7,6 +7,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 import java.io.*;
@@ -16,8 +17,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -122,7 +125,7 @@ public class SimuMapStorage {
         if (!isResolvedWorldId(worldId) || dimension == null) {
             return;
         }
-        SimuMapRegionData data = region.getData();
+        SimuMapRegionData data = region.peekData();
         if (data == null || data.isEmpty() || !data.needsSave()) {
             return;
         }
@@ -165,7 +168,8 @@ public class SimuMapStorage {
         }
         int saved = 0;
         for (SimuMapRegion region : regions) {
-            SimuMapRegionData data = region.getData();
+            // 保存线程不能刷新访问时间，否则每分钟的周期缓存会把所有常驻 region 都钉住，淘汰永不生效。
+            SimuMapRegionData data = region.peekData();
             if (data == null || data.isEmpty() || !data.needsSave()) {
                 continue;
             }
@@ -212,60 +216,74 @@ public class SimuMapStorage {
         });
     }
 
-    public static void loadAll(String worldId, ResourceKey<Level> dimension, Map<Long, SimuMapRegion> regions) {
+    /**
+     * listRegionsAsync: 只列目录不读数据，进世界时不能把整张地图一次性读进内存。
+     */
+    public static void listRegionsAsync(String worldId, ResourceKey<Level> dimension, Consumer<Set<Long>> callback) {
         if (!isResolvedWorldId(worldId) || dimension == null) {
+            callback.accept(Set.of());
             return;
+        }
+        LOAD_EXECUTOR.execute(() -> callback.accept(listRegions(worldId, dimension)));
+    }
+
+    /**
+     * listRegions: 返回磁盘缓存里已有的 region 键，身份不匹配的文件不列入。
+     */
+    public static Set<Long> listRegions(String worldId, ResourceKey<Level> dimension) {
+        Set<Long> keys = new HashSet<>();
+        if (!isResolvedWorldId(worldId) || dimension == null) {
+            return keys;
         }
         Path dir = getRegionDir(worldId, dimension);
         if (!Files.isDirectory(dir)) {
-            return;
+            return keys;
         }
-
         try (var stream = Files.list(dir)) {
             stream.filter(path -> path.toString().endsWith(".smr")).forEach(file -> {
-                String name = file.getFileName().toString();
-                name = name.substring(0, name.length() - 4);
-                String[] parts = name.split("_", 2);
-                if (parts.length != 2) {
-                    return;
-                }
-
-                try {
-                    int regionX = Integer.parseInt(parts[0]);
-                    int regionZ = Integer.parseInt(parts[1]);
-                    SimuMapRegionData data = readRegionFile(file, worldId, dimensionToDir(dimension));
-                    if (data == null) {
-                        return;
-                    }
-
-                    SimuMapRegion region = new SimuMapRegion(regionX, regionZ);
-                    region.setData(data);
-                    data.markDirty();
-                    regions.put(regionKey(regionX, regionZ), region);
-                } catch (NumberFormatException e) {
-                    LOGGER.warn("Simukraft: Skipping malformed region file: {}", file.getFileName());
+                long[] key = parseRegionName(file);
+                if (key != null) {
+                    keys.add(regionKey((int) key[0], (int) key[1]));
                 }
             });
         } catch (IOException e) {
             LOGGER.error("Simukraft: Failed to list region files for world={} dim={}",
                     worldId, dimensionToDir(dimension), e);
         }
-
-        LOGGER.debug("Simukraft: Loaded {} regions from world={} dim={}",
-                regions.size(), worldId, dimensionToDir(dimension));
+        return keys;
     }
 
-    public static void loadAllAsync(String worldId, ResourceKey<Level> dimension, Map<Long, SimuMapRegion> regions) {
-        LOAD_EXECUTOR.execute(() -> loadAll(worldId, dimension, regions));
+    /**
+     * loadRegionAsync: 在加载线程读一个 region，由调用方负责切回客户端线程落地。
+     */
+    public static void loadRegionAsync(String worldId, ResourceKey<Level> dimension, int regionX, int regionZ,
+                                       Consumer<SimuMapRegionData> callback) {
+        if (!isResolvedWorldId(worldId) || dimension == null) {
+            callback.accept(null);
+            return;
+        }
+        String dimensionDir = dimensionToDir(dimension);
+        Path file = getRegionFile(worldId, dimension, regionX, regionZ);
+        LOAD_EXECUTOR.execute(() -> callback.accept(readRegionFile(file, worldId, dimensionDir)));
     }
 
-    public static void loadAllAsync(String worldId, ResourceKey<Level> dimension,
-                                    Consumer<Map<Long, SimuMapRegion>> callback) {
-        LOAD_EXECUTOR.execute(() -> {
-            Map<Long, SimuMapRegion> loadedRegions = new ConcurrentHashMap<>();
-            loadAll(worldId, dimension, loadedRegions);
-            callback.accept(loadedRegions);
-        });
+    /**
+     * parseRegionName: 从文件名解出 region 坐标，非法名返回 null。
+     */
+    @Nullable
+    private static long[] parseRegionName(Path file) {
+        String name = file.getFileName().toString();
+        name = name.substring(0, name.length() - 4);
+        String[] parts = name.split("_", 2);
+        if (parts.length != 2) {
+            return null;
+        }
+        try {
+            return new long[]{Integer.parseInt(parts[0]), Integer.parseInt(parts[1])};
+        } catch (NumberFormatException e) {
+            LOGGER.warn("Simukraft: Skipping malformed region file: {}", file.getFileName());
+            return null;
+        }
     }
 
     private static SimuMapRegionData readRegionFile(Path file, String expectedWorldId, String expectedDimension) {

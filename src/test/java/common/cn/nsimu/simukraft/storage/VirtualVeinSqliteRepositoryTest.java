@@ -57,6 +57,26 @@ class VirtualVeinSqliteRepositoryTest {
         }
     }
 
+    /**
+     * insertIfAbsent: 排队建档走 INSERT OR IGNORE，已有储量不能被新生成的档案覆盖。
+     */
+    @Test
+    void queuedInsertIfAbsentKeepsStoredReserve() throws Exception {
+        try (SimuSqliteDatabase database = openDatabase(tempDir.resolve("virtual-vein-queued-insert.sqlite"))) {
+            VirtualVeinSqliteRepository repository = new VirtualVeinSqliteRepository(database);
+            VirtualVeinFieldKey key = new VirtualVeinFieldKey(4, 5, 1_000, 1_500, "minecraft:plains");
+            try (Connection connection = database.borrowConnection()) {
+                repository.insertIfAbsent(connection, profile(key, "新生成档案", 100));
+                assertEquals("新生成档案", repository.find("minecraft:overworld", key).orElseThrow().slots().getFirst().displayName());
+
+                repository.insertIfAbsent(connection, profile(key, "重复建档", 1));
+                VirtualVeinSlot stored = repository.find("minecraft:overworld", key).orElseThrow().slots().getFirst();
+                assertEquals("新生成档案", stored.displayName());
+                assertEquals(100, stored.remainingReserve());
+            }
+        }
+    }
+
     @Test
     void legacyEmptyProfileCanBeRepairedWithoutOverwritingCurrentProfiles() throws Exception {
         try (SimuSqliteDatabase database = openDatabase(tempDir.resolve("virtual-vein-repair.sqlite"))) {

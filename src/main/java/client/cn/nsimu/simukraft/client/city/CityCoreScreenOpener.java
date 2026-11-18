@@ -1399,25 +1399,48 @@ public final class CityCoreScreenOpener {
             if (!SimuMapManager.isAvailable()) {
                 return;
             }
-            Collection<SimuMapRegion> regions = mapManager.getAllRegions();
-            for (SimuMapRegion region : regions) {
+            // 视口内可能还有未常驻的 region，按需从磁盘补载；同时开启本帧的纹理上传额度。
+            requestVisibleRegionLoads(startX, startY, width, height, centerX, centerY);
+            mapManager.beginTextureUploadWindow();
+            double regionSize = 512.0D * zoomLevel;
+            for (SimuMapRegion region : mapManager.getAllRegions()) {
+                double screenX = centerX + offsetX + region.regionX * 512.0D * zoomLevel;
+                double screenY = centerY + offsetY + region.regionZ * 512.0D * zoomLevel;
+                // 先按屏幕剔除再取纹理，否则屏外的 region 也会挤占这一帧的上传。
+                if (screenX + regionSize < startX || screenX > startX + width
+                        || screenY + regionSize < startY || screenY > startY + height) {
+                    continue;
+                }
                 if (!region.isImageLoaded() && !region.hasData()) {
                     continue;
                 }
-                Identifier textureLocation = region.getTextureLocation();
+                region.touch();
+                Identifier textureLocation = region.getTextureLocation(mapManager.tryAcquireTextureUploadSlot());
                 if (textureLocation == null) {
-                    continue;
-                }
-                double regionWorldX = region.regionX * 512.0D;
-                double regionWorldZ = region.regionZ * 512.0D;
-                double screenX = centerX + offsetX + regionWorldX * zoomLevel;
-                double screenY = centerY + offsetY + regionWorldZ * zoomLevel;
-                double regionSize = 512.0D * zoomLevel;
-                if (screenX + regionSize < startX || screenX > startX + width || screenY + regionSize < startY || screenY > startY + height) {
                     continue;
                 }
                 drawRegionTexture(guiContext, textureLocation, screenX, screenY, regionSize);
             }
+        }
+
+        /**
+         * requestVisibleRegionLoads: 把屏幕视口换算成世界矩形，交给地图管理器按需补载。
+         */
+        private void requestVisibleRegionLoads(int startX, int startY, int width, int height, double centerX, double centerY) {
+            if (zoomLevel <= 0.0D) {
+                return;
+            }
+            double minBlockX = (startX - centerX - offsetX) / zoomLevel;
+            double maxBlockX = (startX + width - centerX - offsetX) / zoomLevel;
+            double minBlockZ = (startY - centerY - offsetY) / zoomLevel;
+            double maxBlockZ = (startY + height - centerY - offsetY) / zoomLevel;
+            mapManager.requestRegionsInView(
+                    (int) Math.max(Integer.MIN_VALUE, Math.floor(minBlockX)),
+                    (int) Math.min(Integer.MAX_VALUE, Math.ceil(maxBlockX)),
+                    (int) Math.max(Integer.MIN_VALUE, Math.floor(minBlockZ)),
+                    (int) Math.min(Integer.MAX_VALUE, Math.ceil(maxBlockZ)));
+            // 烘图排序以视口中心为准，远程看别的城市时不会被玩家坐标挤到后面。
+            mapManager.setBakeFocus((minBlockX + maxBlockX) / 2.0D, (minBlockZ + maxBlockZ) / 2.0D);
         }
 
         private void drawRegionTexture(GUIContext guiContext, Identifier textureLocation, double screenX, double screenY, double regionSize) {

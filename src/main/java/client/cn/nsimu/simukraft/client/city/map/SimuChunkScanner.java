@@ -6,7 +6,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.TallGrassBlock;
@@ -64,7 +63,7 @@ public class SimuChunkScanner {
 
                 int topY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, localX, localZ);
                 ColumnSample sample = sampleColumn(level, chunk, colors, pos, worldX, worldZ, topY, minBuild);
-                data.setData(regionLocalX, regionLocalZ, sample.height(), sample.color(), sample.water(), sample.light());
+                data.setData(regionLocalX, regionLocalZ, sample.height(), sample.color(), sample.water());
             }
         }
 
@@ -73,6 +72,7 @@ public class SimuChunkScanner {
 
     /**
      * sampleColumn: 从地表向下跳过花草，采样可见方块色，水面会与水底混合。
+     * <p>不再读光照：地图烘图不使用亮度，但昼夜变化会让每格 flags 变脏，把整幅图反复重烘和重传。
      */
     private static ColumnSample sampleColumn(Level level, ChunkAccess chunk, SimuBlockColors colors,
                                              BlockPos.MutableBlockPos pos, int worldX, int worldZ,
@@ -102,7 +102,7 @@ public class SimuChunkScanner {
             }
             pos.setY(y);
         }
-        return new ColumnSample((short) y, color, false, readLight(level, pos, worldX, y, worldZ));
+        return new ColumnSample((short) y, color, false);
     }
 
     /**
@@ -147,7 +147,7 @@ public class SimuChunkScanner {
                 color = SimuBlockColors.adjustBrightness(color, -Math.min(0.22f, depth * 0.018f));
             }
         }
-        return new ColumnSample((short) surfaceY, color, !lava, readLight(level, pos, worldX, surfaceY, worldZ));
+        return new ColumnSample((short) surfaceY, color, !lava);
     }
 
     /**
@@ -185,16 +185,7 @@ public class SimuChunkScanner {
         return state.is(BlockTags.IMPERMEABLE);
     }
 
-    private static int readLight(Level level, BlockPos.MutableBlockPos pos, int worldX, int y, int worldZ) {
-        try {
-            pos.set(worldX, y + 1, worldZ);
-            return Math.max(level.getBrightness(LightLayer.SKY, pos), level.getBrightness(LightLayer.BLOCK, pos));
-        } catch (RuntimeException ignored) {
-            return 15;
-        }
-    }
-
-    private record ColumnSample(short height, int color, boolean water, int light) {
+    private record ColumnSample(short height, int color, boolean water) {
     }
 
     /**

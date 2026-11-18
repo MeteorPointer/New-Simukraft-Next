@@ -26,6 +26,8 @@ public class SimuMapRegion {
     private Identifier textureLocation;
     private volatile boolean textureNeedsUpload = false;
     private volatile boolean imageLoaded = false;
+    /** 图像刚建立时被清零，只有整幅重烘才不会留空洞。 */
+    private boolean fullBakeRequested = true;
     private long lastAccessTime;
 
     public SimuMapRegion(int regionX, int regionZ) {
@@ -67,6 +69,14 @@ public class SimuMapRegion {
     }
 
     /**
+     * peekData: 不刷新访问时间的只读访问，供脏区扫描和缓存淘汰判断使用。
+     */
+    @Nullable
+    public SimuMapRegionData peekData() {
+        return data;
+    }
+
+    /**
      * 判断 region 是否已经持有数据。
      */
     public boolean hasData() {
@@ -76,15 +86,35 @@ public class SimuMapRegion {
     /**
      * 获取或创建 CPU 侧渲染图像。
      * 26.3 的 DynamicTexture 会立刻申请 GPU 资源，只能在渲染线程创建。
+     * <p>与烘图写入、纹理上传和释放共用同一把锁，避免拿到刚被关闭的图像。
      */
-    public NativeImage getOrCreateImage() {
+    public synchronized NativeImage getOrCreateImage() {
         if (renderedImage == null || renderedImage.isClosed()) {
             renderedImage = new NativeImage(512, 512, true);
             renderedImage.fillRect(0, 0, 512, 512, 0);
             textureNeedsUpload = true;
             imageLoaded = false;
+            fullBakeRequested = true;
         }
         return renderedImage;
+    }
+
+    /**
+     * takeFullBakeRequest: 取走“图像刚重建，需要整幅重烘”的请求。
+     */
+    public synchronized boolean takeFullBakeRequest() {
+        if (!fullBakeRequested) {
+            return false;
+        }
+        fullBakeRequested = false;
+        return true;
+    }
+
+    /**
+     * touch: 记下本 region 当前正在被使用，避免常驻上限淘汰正在显示的区块。
+     */
+    public void touch() {
+        lastAccessTime = System.currentTimeMillis();
     }
 
     /**
@@ -107,25 +137,33 @@ public class SimuMapRegion {
     /**
      * 标记纹理需要上传到 GPU。
      */
-    public void markTextureNeedsUpload() {
+    public synchronized void markTextureNeedsUpload() {
         textureNeedsUpload = true;
         imageLoaded = false;
+        fullBakeRequested = false;
     }
 
     /**
-     * 获取地图 region 在 TextureManager 中的标识，并在需要时上传。
+     * 获取地图 region 在 TextureManager 中的标识。
+     * <p>已有纹理时只在拿到本帧上传名额才做 512x512 上传，避免整批脏 region 在同一帧挤爆渲染线程；
+     * 没拿到名额就继续用旧纹理，下一帧再传。
      */
     @Nullable
-    public Identifier getTextureLocation() {
+    public Identifier getTextureLocation(boolean allowUpload) {
         if (renderedImage == null) {
             return null;
         }
-        if (dynamicTexture == null || textureNeedsUpload) {
-            if (RenderSystem.isOnRenderThread()) {
-                uploadNow();
-            } else {
-                Minecraft.getInstance().execute(this::uploadNow);
-            }
+        boolean firstCreation = dynamicTexture == null;
+        if (!firstCreation && !textureNeedsUpload) {
+            return textureLocation;
+        }
+        if (!firstCreation && !allowUpload) {
+            return textureLocation;
+        }
+        if (RenderSystem.isOnRenderThread()) {
+            uploadNow();
+        } else {
+            Minecraft.getInstance().execute(this::uploadNow);
         }
         return textureLocation;
     }

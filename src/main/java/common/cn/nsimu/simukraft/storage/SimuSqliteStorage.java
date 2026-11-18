@@ -703,8 +703,8 @@ public final class SimuSqliteStorage {
     }
 
     // ── 虚拟矿脉 ──────────────────────────────────────────────────────────────
-    // 这几个操作是"读-改-写"且需要返回结果（原子建档、原子扣减储量）：
-    // 仓储内部经 callSync 提交到写线程执行并阻塞等待，与队列中其他写入保持全序，主线程不再直接执行 SQL。
+    // 查档和扣减储量是“读-改-写”且需要返回结果：仓储内部经 callSync 提交到写线程执行并阻塞等待，与队列里其他写入保持全序。
+    // 新矿区建档只需要“登记一份”，改走 persistVirtualVeinFieldIfAbsent 的异步写，不再阻塞服务端主线程。
 
     /**
      * findVirtualVeinField: 查询已经建立的虚拟矿区档案。
@@ -715,14 +715,25 @@ public final class SimuSqliteStorage {
     }
 
     /**
-     * createVirtualVeinFieldIfAbsent: 原子建立虚拟矿区档案。
+     * canPersistVirtualVeinField: 判断当前是否可以排队登记新矿区档案。
      */
-    public static Optional<VirtualVeinFieldProfile> createVirtualVeinFieldIfAbsent(ServerLevel level, VirtualVeinFieldProfile profile) {
+    public static boolean canPersistVirtualVeinField(ServerLevel level) {
         SimuSqliteStorage storage = openSafely(level);
-        if (storage == null || profile == null || storage.database.isDegraded()) {
-            return Optional.empty();
+        return storage != null && !storage.database.isDegraded();
+    }
+
+    /**
+     * persistVirtualVeinFieldIfAbsent: 把新矿区档案排进写队列，不阻塞调用线程。
+     * 合并键含维度、格子坐标和群系，同一矿区的重复建档只会保留一份任务。
+     */
+    public static void persistVirtualVeinFieldIfAbsent(ServerLevel level, VirtualVeinFieldProfile profile) {
+        if (profile == null || !canPersistVirtualVeinField(level)) {
+            return;
         }
-        return storage.virtualVeins.createIfAbsent(profile);
+        String dimensionId = dimensionId(level);
+        VirtualVeinFieldKey key = profile.key();
+        write(level, "virtual_vein:" + dimensionId + ":" + key.cellX() + ":" + key.cellZ() + ":" + key.biomeId(),
+                (storage, connection) -> storage.virtualVeins.insertIfAbsent(connection, profile));
     }
 
     /**

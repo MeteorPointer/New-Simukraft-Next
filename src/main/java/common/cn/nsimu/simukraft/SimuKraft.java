@@ -334,6 +334,8 @@ public final class SimuKraft {
             CityPermissionInviteService.tick(level);
         });
         PlayerWelcomeService.tick(event.getServer());
+        // 矿区建档队列只针对主世界，按服务器每拍限流消费，不随维度数量重复调用。
+        VirtualVeinService.tick(event.getServer());
         long now = System.nanoTime();
         if (lastReportTickNanos != 0L) {
             PathReportSink.serverTick(now - lastReportTickNanos);

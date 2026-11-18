@@ -10,6 +10,11 @@ public class SimuMapRegionData {
 
     public static final int SIZE = 512;
     public static final int AREA = SIZE * SIZE;
+    /**
+     * 一个 region 边长上的 chunk 数量。
+     */
+    public static final int CHUNK_SIDE = SIZE / 16;
+    public static final int CHUNKS = CHUNK_SIDE * CHUNK_SIDE;
     public static final short HEIGHT_UNKNOWN = Short.MIN_VALUE;
 
     /**
@@ -23,14 +28,22 @@ public class SimuMapRegionData {
     public final int[] color = new int[AREA];
 
     /**
-     * 标志位：bit0=水面，bit1-4=光照等级。
+     * 标志位：bit0=水面。
+     * 光照位已停用：烘图只用高度和颜色，但昼夜光照会让整块 region 持续标脏重烘，白耗 CPU 和显存上传。
      */
     public final short[] flags = new short[AREA];
 
     /**
-     * 数据是否被修改，需要重新渲染。
+     * 每个 chunk 是否需要重新烘图。旧实现只有一个 region 级脏标记，一个区块变化就重画 26 万像素。
      */
-    private volatile boolean dirty = true;
+    private final boolean[] chunkDirty = new boolean[CHUNKS];
+
+    private int dirtyChunkCount;
+
+    /**
+     * 整块重绘标记，用于首次烘图、方块图集重建和磁盘加载后的补烘。
+     */
+    private boolean fullDirty = true;
 
     /**
      * 数据是否需要写回当前存档的磁盘缓存。
@@ -62,11 +75,11 @@ public class SimuMapRegionData {
     }
 
     /**
-     * 设置指定位置的地图采样数据。
+     * 设置指定位置的地图采样数据。与烘图线程按同一把锁互斥，只在像素真的变化时标脏。
      */
-    public synchronized void setData(int localX, int localZ, short h, int argbColor, boolean water, int light) {
+    public synchronized void setData(int localX, int localZ, short h, int argbColor, boolean water) {
         int idx = index(localX, localZ);
-        short f = (short) ((water ? 1 : 0) | ((light & 0xF) << 1));
+        short f = (short) (water ? 1 : 0);
         if (height[idx] == h && color[idx] == argbColor && flags[idx] == f) {
             return;
         }
@@ -78,12 +91,23 @@ public class SimuMapRegionData {
         height[idx] = h;
         color[idx] = argbColor;
         flags[idx] = f;
-        dirty = true;
+        markChunkDirty(localX, localZ);
         saveDirty = true;
     }
 
     /**
-     * 获取指定位置的高度。
+     * markChunkDirty: 标出像素所属 chunk 需要重烘。
+     */
+    private void markChunkDirty(int localX, int localZ) {
+        int chunkIndex = (localZ >> 4) * CHUNK_SIDE + (localX >> 4);
+        if (!chunkDirty[chunkIndex]) {
+            chunkDirty[chunkIndex] = true;
+            dirtyChunkCount++;
+        }
+    }
+
+    /**
+     * 判断指定位置的高度。
      */
     public short getHeight(int localX, int localZ) {
         return height[index(localX, localZ)];
@@ -104,38 +128,81 @@ public class SimuMapRegionData {
     }
 
     /**
-     * 获取指定位置的光照等级。
+     * mergeUnknownFrom: 用磁盘快照填补本地还没采到的格子，不覆盖已经采到的地形。
+     * <p>区块可能比磁盘数据先一步被扫描建好 region，这时候只能填空不能回退。
      */
-    public int getLight(int localX, int localZ) {
-        return (flags[index(localX, localZ)] >> 1) & 0xF;
+    public synchronized void mergeUnknownFrom(SimuMapRegionData loaded) {
+        boolean merged = false;
+        for (int index = 0; index < AREA; index++) {
+            if (height[index] != HEIGHT_UNKNOWN || loaded.height[index] == HEIGHT_UNKNOWN) {
+                continue;
+            }
+            height[index] = loaded.height[index];
+            color[index] = loaded.color[index];
+            flags[index] = loaded.flags[index];
+            filled++;
+            merged = true;
+        }
+        if (merged) {
+            fullDirty = true;
+            saveDirty = true;
+        }
     }
 
     /**
      * 判断是否有未渲染的修改。
      */
-    public boolean isDirty() {
-        return dirty;
+    public synchronized boolean isDirty() {
+        return fullDirty || dirtyChunkCount > 0;
     }
 
     /**
-     * 标记为已渲染。
+     * 标记整块 region 需要重新渲染。
      */
-    public void clearDirty() {
-        dirty = false;
+    public synchronized void markDirty() {
+        fullDirty = true;
+        Arrays.fill(chunkDirty, false);
+        dirtyChunkCount = 0;
     }
 
     /**
-     * 标记为需要重新渲染。
+     * takeDirtyChunks: 取走本 region 待重烘的 chunk 列表并清脏。返回 null 表示需要整幅重烘。
      */
-    public void markDirty() {
-        dirty = true;
+    public synchronized int[] takeDirtyChunks() {
+        if (fullDirty) {
+            fullDirty = false;
+            // 整幅重烘已经覆盖所有 chunk，不要把零散脏块留到下一轮。
+            Arrays.fill(chunkDirty, false);
+            dirtyChunkCount = 0;
+            return null;
+        }
+        if (dirtyChunkCount <= 0) {
+            return new int[0];
+        }
+        int[] chunks = new int[dirtyChunkCount];
+        int written = 0;
+        for (int index = 0; index < CHUNKS && written < chunks.length; index++) {
+            if (chunkDirty[index]) {
+                chunkDirty[index] = false;
+                chunks[written++] = index;
+            }
+        }
+        dirtyChunkCount = 0;
+        return chunks;
     }
 
     /**
      * 检查该 region 是否完全空白。
      */
-    public boolean isEmpty() {
+    public synchronized boolean isEmpty() {
         return filled <= 0;
+    }
+
+    /**
+     * isFullySampled: 本地已经采满整块，不需要再从磁盘补数据。
+     */
+    public synchronized boolean isFullySampled() {
+        return filled >= AREA;
     }
 
     /**
@@ -155,7 +222,7 @@ public class SimuMapRegionData {
     /**
      * setFilledCount: 从磁盘加载后设置已填充列数。
      */
-    public void setFilledCount(int filledCount) {
+    public synchronized void setFilledCount(int filledCount) {
         filled = Math.max(0, filledCount);
     }
 

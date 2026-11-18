@@ -1,8 +1,10 @@
 package common.cn.nsimu.simukraft.virtualvein;
 
 import com.mojang.datafixers.util.Pair;
+import common.cn.nsimu.simukraft.SimuKraft;
 import common.cn.nsimu.simukraft.mixin.MixinMultiNoiseBiomeSourceAccessor;
 import common.cn.nsimu.simukraft.storage.SimuSqliteStorage;
+import common.cn.nsimu.simukraft.util.SaveScopedCacheKey;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
@@ -11,20 +13,27 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeResolver;
+import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
-import net.minecraft.world.level.storage.LevelResource;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -34,8 +43,23 @@ import java.util.concurrent.ConcurrentMap;
 public final class VirtualVeinService {
     private static final int RESERVE_MIN = 4_000;
     private static final int RESERVE_MAX = 200_000;
-    private static final int MAX_CACHE_SIZE = 512;
-    private static final ConcurrentMap<CacheKey, VirtualVeinFieldProfile> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final int MAX_FIELD_CACHE_SIZE = 4096;
+    // 区块建档改为限流：进世界时成批区块不能在同一帧各做一次气候采样和数据库往返。
+    private static final int FIELD_INIT_CHUNK_BUDGET_PER_TICK = 8;
+    private static final int MAX_PENDING_FIELD_INIT_CHUNKS = 4096;
+    /** 按最近使用淘汰的矿区缓存；旧实现满 512 就整体清空，跑图时会反复回落数据库。 */
+    private static final LinkedHashMap<CacheKey, VirtualVeinFieldProfile> FIELD_CACHE =
+            new LinkedHashMap<>(256, 0.75F, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<CacheKey, VirtualVeinFieldProfile> eldest) {
+                    return size() > MAX_FIELD_CACHE_SIZE;
+                }
+            };
+    // 待建档区块队列（打包坐标），只在服务端主线程消费；超限丢弃，由玩家实际查询时按需建档兜底。
+    private static final Queue<Long> PENDING_FIELD_INIT_CHUNKS = new ConcurrentLinkedQueue<>();
+    private static final Set<Long> PENDING_FIELD_INIT_KEYS = ConcurrentHashMap.newKeySet();
+    /** 气候采样器、群系解析器和气候参数表按存档加维度长期复用；26.3 每次 createClimateSampler 都是新建对象。 */
+    private static final ConcurrentMap<String, ClimateAccess> CLIMATE_ACCESS_CACHE = new ConcurrentHashMap<>();
 
     private VirtualVeinService() {
     }
@@ -47,12 +71,16 @@ public final class VirtualVeinService {
         if (!level.dimension().equals(Level.OVERWORLD)) {
             return new VirtualVeinLookupResult(VirtualVeinLookupStatus.NOT_OVERWORLD, null);
         }
-        VirtualVeinFieldKey key = resolveFieldKey(level, position);
+        ClimateAccess access = climateAccess(level);
+        if (access == null) {
+            return new VirtualVeinLookupResult(VirtualVeinLookupStatus.UNSUPPORTED_WORLDGEN, null);
+        }
+        VirtualVeinFieldKey key = resolveFieldKey(level, position, access);
         if (key == null) {
             return new VirtualVeinLookupResult(VirtualVeinLookupStatus.UNSUPPORTED_WORLDGEN, null);
         }
-        CacheKey cacheKey = new CacheKey(worldId(level.getServer()), level.dimension(), key.cellX(), key.cellZ(), key.biomeId());
-        VirtualVeinFieldProfile cached = FIELD_CACHE.get(cacheKey);
+        CacheKey cacheKey = cacheKeyOf(level, key);
+        VirtualVeinFieldProfile cached = cachedField(cacheKey);
         if (cached != null) {
             return new VirtualVeinLookupResult(VirtualVeinLookupStatus.READY, cached);
         }
@@ -61,7 +89,7 @@ public final class VirtualVeinService {
             VirtualVeinFieldProfile storedProfile = existing.get();
             List<VirtualVeinDefinition> definitions = VirtualVeinDefinitionLoader.INSTANCE.definitions();
             if (storedProfile.slots().isEmpty() && !definitions.isEmpty() && targetCount(level.getSeed(), key) > 0) {
-                FieldClimate fieldClimate = sampleClimate(level, position, key);
+                FieldClimate fieldClimate = sampleClimate(level, position, key, access);
                 if (fieldClimate != null) {
                     Optional<VirtualVeinFieldProfile> repaired = SimuSqliteStorage.repairLegacyVirtualVeinField(
                             level,
@@ -79,17 +107,68 @@ public final class VirtualVeinService {
         if (definitions.isEmpty()) {
             return new VirtualVeinLookupResult(VirtualVeinLookupStatus.DEFINITIONS_UNAVAILABLE, null);
         }
-        FieldClimate fieldClimate = sampleClimate(level, position, key);
+        FieldClimate fieldClimate = sampleClimate(level, position, key, access);
         if (fieldClimate == null) {
             return new VirtualVeinLookupResult(VirtualVeinLookupStatus.UNSUPPORTED_WORLDGEN, null);
         }
         VirtualVeinFieldProfile generated = generateProfile(level, key, fieldClimate, definitions);
-        Optional<VirtualVeinFieldProfile> stored = SimuSqliteStorage.createVirtualVeinFieldIfAbsent(level, generated);
-        if (stored.isEmpty()) {
+        if (!SimuSqliteStorage.canPersistVirtualVeinField(level)) {
             return new VirtualVeinLookupResult(VirtualVeinLookupStatus.DATABASE_UNAVAILABLE, null);
         }
-        cache(cacheKey, stored.get());
-        return new VirtualVeinLookupResult(VirtualVeinLookupStatus.READY, stored.get());
+        // 建档只排进写队列：主线程不再阻塞等写线程。储量仍以数据库为准，扣减走 consume 的原子读改写。
+        SimuSqliteStorage.persistVirtualVeinFieldIfAbsent(level, generated);
+        cache(cacheKey, generated);
+        return new VirtualVeinLookupResult(VirtualVeinLookupStatus.READY, generated);
+    }
+
+    /**
+     * enqueueFieldInitChunk: 区块加载只排队建档，不在区块风暴那一帧做重活。
+     */
+    public static void enqueueFieldInitChunk(ServerLevel level, ChunkPos chunkPos) {
+        if (level == null || chunkPos == null || !level.dimension().equals(Level.OVERWORLD)) {
+            return;
+        }
+        // 去重集合的规模就是队列上限判据，ConcurrentHashMap.size() 是 O(1)，不能每次扫链表。
+        if (PENDING_FIELD_INIT_KEYS.size() >= MAX_PENDING_FIELD_INIT_CHUNKS) {
+            return;
+        }
+        long packed = chunkPos.pack();
+        if (PENDING_FIELD_INIT_KEYS.add(packed)) {
+            PENDING_FIELD_INIT_CHUNKS.add(packed);
+        }
+    }
+
+    /**
+     * tick: 每拍按固定预算补建待建档矿区，单块失败只记日志不能拖住整个 tick。
+     */
+    public static void tick(MinecraftServer server) {
+        if (server == null || PENDING_FIELD_INIT_CHUNKS.isEmpty()) {
+            return;
+        }
+        ServerLevel level = server.overworld();
+        if (level == null) {
+            clearFieldInitQueue();
+            return;
+        }
+        for (int processed = 0; processed < FIELD_INIT_CHUNK_BUDGET_PER_TICK; processed++) {
+            Long packed = PENDING_FIELD_INIT_CHUNKS.poll();
+            if (packed == null) {
+                return;
+            }
+            PENDING_FIELD_INIT_KEYS.remove(packed);
+            int chunkX = ChunkPos.getX(packed);
+            int chunkZ = ChunkPos.getZ(packed);
+            try {
+                getOrCreateField(level, new BlockPos(chunkX * 16 + 8, level.getSeaLevel(), chunkZ * 16 + 8));
+            } catch (Exception exception) {
+                SimuKraft.LOGGER.warn("Simukraft: virtual vein field init skipped for chunk ({}, {})", chunkX, chunkZ, exception);
+            }
+        }
+    }
+
+    private static void clearFieldInitQueue() {
+        PENDING_FIELD_INIT_CHUNKS.clear();
+        PENDING_FIELD_INIT_KEYS.clear();
     }
 
     /**
@@ -124,7 +203,7 @@ public final class VirtualVeinService {
             VirtualVeinSlot slot = slots.get(index);
             if (slot.veinId().equals(veinId) && slot.acceptsY(position.getY())) {
                 Optional<VirtualVeinConsumption> consumption = SimuSqliteStorage.consumeVirtualVein(level, lookup.profile().key(), index, amount);
-                consumption.ifPresent(ignored -> FIELD_CACHE.remove(new CacheKey(worldId(level.getServer()), level.dimension(), lookup.profile().key().cellX(), lookup.profile().key().cellZ(), lookup.profile().key().biomeId())));
+                consumption.ifPresent(ignored -> invalidateField(cacheKeyOf(level, lookup.profile().key())));
                 return consumption;
             }
         }
@@ -132,21 +211,55 @@ public final class VirtualVeinService {
     }
 
     /**
-     * clearCachedFields: 数据包重载后清理有限矿区缓存。
+     * cacheKeyOf: 组成当前存档、维度和矿区格子的缓存键。
      */
-    public static void clearCachedFields() {
-        FIELD_CACHE.clear();
+    private static CacheKey cacheKeyOf(ServerLevel level, VirtualVeinFieldKey key) {
+        return new CacheKey(worldId(level.getServer()), level.dimension(), key.cellX(), key.cellZ(), key.biomeId());
     }
 
     /**
-     * clearServerCache: 服务端关闭时释放该存档的矿区缓存。
+     * clearCachedFields: 数据包重载后清理矿区缓存和气候采样复用，群系参数表可能已经变了。
+     */
+    public static void clearCachedFields() {
+        synchronized (FIELD_CACHE) {
+            FIELD_CACHE.clear();
+        }
+        CLIMATE_ACCESS_CACHE.clear();
+    }
+
+    /**
+     * clearServerCache: 服务端关闭时释放该存档的矿区缓存、气候采样复用和待建档队列。
      */
     public static void clearServerCache(MinecraftServer server) {
+        clearFieldInitQueue();
         if (server == null) {
             return;
         }
         String worldId = worldId(server);
-        FIELD_CACHE.keySet().removeIf(key -> key.worldId().equals(worldId));
+        synchronized (FIELD_CACHE) {
+            FIELD_CACHE.keySet().removeIf(key -> key.worldId().equals(worldId));
+        }
+        // 复用键是“存档根目录|维度”，前缀就是该存档。
+        CLIMATE_ACCESS_CACHE.keySet().removeIf(key -> key.startsWith(worldId + "|"));
+    }
+
+    @Nullable
+    private static VirtualVeinFieldProfile cachedField(CacheKey key) {
+        synchronized (FIELD_CACHE) {
+            return FIELD_CACHE.get(key);
+        }
+    }
+
+    private static void cache(CacheKey key, VirtualVeinFieldProfile profile) {
+        synchronized (FIELD_CACHE) {
+            FIELD_CACHE.put(key, profile);
+        }
+    }
+
+    private static void invalidateField(CacheKey key) {
+        synchronized (FIELD_CACHE) {
+            FIELD_CACHE.remove(key);
+        }
     }
 
     private static VirtualVeinFieldProfile generateProfile(ServerLevel level,
@@ -218,15 +331,13 @@ public final class VirtualVeinService {
     /**
      * sampleClimate: 用当前世界多重噪声表匹配群系自己的气候点，创建矿区快照。
      */
-    private static FieldClimate sampleClimate(ServerLevel level, BlockPos position, VirtualVeinFieldKey key) {
-        int sampleY = level.getSeaLevel();
-        RandomState randomState = level.getChunkSource().randomState();
-        Climate.Sampler sampler = randomState.createClimateSampler(SamplerContext.EMPTY_UNCACHED);
+    @Nullable
+    private static FieldClimate sampleClimate(ServerLevel level, BlockPos position, VirtualVeinFieldKey key, ClimateAccess access) {
         int quartX = QuartPos.fromBlock(position.getX());
-        int quartY = QuartPos.fromBlock(sampleY);
+        int quartY = QuartPos.fromBlock(level.getSeaLevel());
         int quartZ = QuartPos.fromBlock(position.getZ());
-        Climate.TargetPoint target = sampler.sample(quartX, quartY, quartZ);
-        List<Pair<Climate.ParameterPoint, String>> parameters = climateParameterEntries(level);
+        Climate.TargetPoint target = access.sampler().sample(quartX, quartY, quartZ);
+        List<Pair<Climate.ParameterPoint, String>> parameters = access.parameterEntries(level);
         Climate.ParameterPoint parameterPoint = findNearestUsableParameterPoint(target, key.biomeId(), parameters);
         if (parameterPoint == null) {
             // 海平面采到洞穴群系时，只在同一张世界参数表里找最近的可用点，不再换成原版预设。
@@ -241,20 +352,47 @@ public final class VirtualVeinService {
     /**
      * resolveFieldKey: 按当前位置噪声群系将空间矿区切分为独立档案。
      */
-    private static VirtualVeinFieldKey resolveFieldKey(ServerLevel level, BlockPos position) {
-        var biomeSource = level.getChunkSource().getGenerator().getBiomeSource();
-        Climate.Sampler sampler = level.getChunkSource().randomState().createClimateSampler(SamplerContext.EMPTY_UNCACHED);
+    @Nullable
+    private static VirtualVeinFieldKey resolveFieldKey(ServerLevel level, BlockPos position, ClimateAccess access) {
         int quartX = QuartPos.fromBlock(position.getX());
         int quartY = QuartPos.fromBlock(level.getSeaLevel());
         int quartZ = QuartPos.fromBlock(position.getZ());
-        String biomeId = biomeId(level.registryAccess(), biomeSource.createResolver(sampler).getNoiseBiome(quartX, quartY, quartZ));
+        String biomeId = biomeId(level.registryAccess(), access.resolver().getNoiseBiome(quartX, quartY, quartZ));
         return VirtualVeinFieldResolver.resolve(level.getSeed(), position.getX(), position.getZ(), biomeId);
     }
 
     /**
-     * climateParameterEntries: 优先读取世界 MultiNoiseBiomeSource 的运行时表，否则回退原版预设。
+     * climateAccess: 按存档加维度长期复用气候采样器、群系解析器和参数表。
+     * <p>26.3 的 createClimateSampler 每次调用都会新建采样器，且 EMPTY_UNCACHED 会关掉密度函数缓存，
+     * 不能放回每区块一次的调用里；这里只在 RandomState 变化时重建一次。
+     * <p>只在服务端主线程访问。
      */
-    private static List<Pair<Climate.ParameterPoint, String>> climateParameterEntries(ServerLevel level) {
+    @Nullable
+    private static ClimateAccess climateAccess(ServerLevel level) {
+        RandomState randomState = level.getChunkSource().randomState();
+        String key = SaveScopedCacheKey.levelKey(level);
+        ClimateAccess cached = CLIMATE_ACCESS_CACHE.get(key);
+        if (cached != null && cached.randomState() == randomState) {
+            return cached;
+        }
+        try {
+            SamplerContext samplerContext = SamplerContext.builder().enableCaches().build();
+            Climate.Sampler sampler = randomState.createClimateSampler(samplerContext);
+            BiomeSource biomeSource = level.getChunkSource().getGenerator().getBiomeSource();
+            BiomeResolver resolver = biomeSource.createResolver(sampler);
+            ClimateAccess access = new ClimateAccess(randomState, sampler, resolver);
+            CLIMATE_ACCESS_CACHE.put(key, access);
+            return access;
+        } catch (RuntimeException exception) {
+            SimuKraft.LOGGER.warn("Simukraft: climate sampling unavailable for dimension {}", level.dimension().identifier(), exception);
+            return null;
+        }
+    }
+
+    /**
+     * buildParameterEntries: 优先读取世界 MultiNoiseBiomeSource 的运行时表，否则回退原版预设。
+     */
+    private static List<Pair<Climate.ParameterPoint, String>> buildParameterEntries(ServerLevel level) {
         List<Pair<Climate.ParameterPoint, Holder<Biome>>> parameters = worldClimateParameters(level);
         List<Pair<Climate.ParameterPoint, String>> named = new ArrayList<>(parameters.size());
         for (Pair<Climate.ParameterPoint, Holder<Biome>> parameter : parameters) {
@@ -361,20 +499,50 @@ public final class VirtualVeinService {
         return value * value;
     }
 
-    private static void cache(CacheKey key, VirtualVeinFieldProfile profile) {
-        if (FIELD_CACHE.size() >= MAX_CACHE_SIZE) {
-            FIELD_CACHE.clear();
-        }
-        FIELD_CACHE.put(key, profile);
-    }
-
     private static String worldId(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize().toString();
+        return SaveScopedCacheKey.serverKey(server);
     }
 
     private record CacheKey(String worldId, ResourceKey<Level> dimension, int cellX, int cellZ, String biomeId) {
     }
 
     private record FieldClimate(Climate.ParameterPoint parameterPoint) {
+    }
+
+    /**
+     * ClimateAccess: 同一个存档同一维度内长期复用的气候采样入口。
+     * <p>只在服务端主线程访问，因此参数表采用惰性填充，不再每区块重建。
+     */
+    private static final class ClimateAccess {
+        private final RandomState randomState;
+        private final Climate.Sampler sampler;
+        private final BiomeResolver resolver;
+        @Nullable
+        private List<Pair<Climate.ParameterPoint, String>> parameterEntries;
+
+        private ClimateAccess(RandomState randomState, Climate.Sampler sampler, BiomeResolver resolver) {
+            this.randomState = randomState;
+            this.sampler = sampler;
+            this.resolver = resolver;
+        }
+
+        private RandomState randomState() {
+            return randomState;
+        }
+
+        private Climate.Sampler sampler() {
+            return sampler;
+        }
+
+        private BiomeResolver resolver() {
+            return resolver;
+        }
+
+        private List<Pair<Climate.ParameterPoint, String>> parameterEntries(ServerLevel level) {
+            if (parameterEntries == null) {
+                parameterEntries = buildParameterEntries(level);
+            }
+            return parameterEntries;
+        }
     }
 }

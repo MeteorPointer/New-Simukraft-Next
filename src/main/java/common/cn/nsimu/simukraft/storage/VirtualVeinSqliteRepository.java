@@ -42,6 +42,17 @@ public final class VirtualVeinSqliteRepository {
     }
 
     /**
+     * insertIfAbsent: 在写线程的批次事务内登记矿区档案，已存在则保持不变。
+     * 建档不再阻塞服务端主线程等待结果，储量仍以数据库行为准。
+     */
+    public void insertIfAbsent(Connection connection, VirtualVeinFieldProfile profile) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(INSERT_SQL)) {
+            bindProfile(statement, profile);
+            statement.executeUpdate();
+        }
+    }
+
+    /**
      * createIfAbsent: 原子建立矿区档案。在写线程执行并同步等待结果。
      */
     public Optional<VirtualVeinFieldProfile> createIfAbsent(VirtualVeinFieldProfile profile) {

@@ -109,6 +109,7 @@
     "advancement.simukraft.child.title":  "A kid??",
     "advancement.simukraft.child.description":  "Who had it.... whatever",
     "key.categories.simukraft":  "New Sim-U-Kraft",
+    "key.category.simukraft.simukraft":  "New Sim-U-Kraft",
     "key.simukraft.rts.toggle":  "Toggle RTS cursor mode",
     "key.simukraft.rts.delete":  "RTS demolish selected target",
     "key.simukraft.rts.minimap_toggle":  "Expand/collapse RTS minimap",

@@ -2,7 +2,6 @@ package client.cn.nsimu.simukraft.client.ui;
 
 import com.lowdragmc.lowdraglib2.gui.texture.*;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
-import common.cn.nsimu.simukraft.config.ClientConfig;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
@@ -23,7 +22,7 @@ public final class SimuKraftGlassTextures {
      * enabled: 读取客户端配置，判断是否启用毛玻璃底色。
      */
     public static boolean enabled() {
-        return ClientConfig.glassUiEnabled();
+        return false;
     }
 
     /**
@@ -113,7 +112,7 @@ public final class SimuKraftGlassTextures {
     }
 
     private static int tint(int alpha) {
-        return (alpha << 24) | ClientConfig.glassColor();
+        return (alpha << 24) | 0x101828;
     }
 
     private static IGuiTexture layered(float radius, int tint, int border, float stroke) {

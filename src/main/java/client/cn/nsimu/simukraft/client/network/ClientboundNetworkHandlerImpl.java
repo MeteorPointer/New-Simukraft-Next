@@ -64,6 +64,8 @@ import common.cn.nsimu.simukraft.network.rts.RtsBuildingBoundsSyncPacket;
 import common.cn.nsimu.simukraft.network.rts.RtsConstructionPreviewSyncPacket;
 import common.cn.nsimu.simukraft.network.rts.RtsLogisticsRoutesSyncPacket;
 import common.cn.nsimu.simukraft.network.toast.InfoToastPacket;
+import common.cn.nsimu.simukraft.network.mail.MailStatePacket;
+import client.cn.nsimu.simukraft.client.mail.MailClientState;
 import net.minecraft.client.Minecraft;
 
 import java.util.Map;
@@ -194,6 +196,11 @@ public final class ClientboundNetworkHandlerImpl implements ClientboundNetworkHa
         ClientSimukraftData.setCurrentCityPopulation(packet.cityPopulation());
         ClientSimukraftData.setPermissionLevel(packet.permissionLevel());
         ClientSimukraftData.setCreativeMode(packet.creativeMode());
+    }
+
+    @Override
+    public void handleMailState(MailStatePacket packet) {
+        MailClientState.apply(packet.unreadCount());
     }
 
     @Override

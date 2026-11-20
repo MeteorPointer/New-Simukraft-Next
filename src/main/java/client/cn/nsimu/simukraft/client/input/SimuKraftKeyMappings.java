@@ -17,6 +17,7 @@ public final class SimuKraftKeyMappings {
     public static final KeyMapping RTS_DELETE = key("key.simukraft.rts.delete", InputConstants.KEY_DELETE);
     public static final KeyMapping RTS_MINIMAP_TOGGLE = key("key.simukraft.rts.minimap_toggle", InputConstants.KEY_M);
     public static final KeyMapping AUTH_OPEN = key("key.simukraft.auth.open", InputConstants.UNKNOWN.getValue());
+    public static final KeyMapping MAIL_OPEN = key("key.simukraft.mail.open", InputConstants.KEY_C);
 
     public static final KeyMapping SELECTION_POINT_1 = mouse("key.simukraft.selection.point1", InputConstants.MOUSE_BUTTON_LEFT);
     public static final KeyMapping SELECTION_POINT_2 = mouse("key.simukraft.selection.point2", InputConstants.MOUSE_BUTTON_RIGHT);
@@ -42,6 +43,7 @@ public final class SimuKraftKeyMappings {
         event.register(RTS_DELETE);
         event.register(RTS_MINIMAP_TOGGLE);
         if (SponsorEdition.isEnabled()) event.register(AUTH_OPEN);
+        event.register(MAIL_OPEN);
         event.register(SELECTION_POINT_1);
         event.register(SELECTION_POINT_2);
         event.register(SELECTION_CONFIRM);

@@ -4,6 +4,7 @@ import common.cn.nsimu.simukraft.city.CityData;
 import common.cn.nsimu.simukraft.city.CityRuntimeService;
 import common.cn.nsimu.simukraft.city.CityService;
 import common.cn.nsimu.simukraft.util.SaveScopedCacheKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,6 +52,14 @@ public final class PopulationGrowthService {
             return;
         }
         LAST_GROWTH_DAY_BY_LEVEL.put(SaveScopedCacheKey.levelKey(level), currentDay);
+    }
+
+    /**
+     * clearServerCaches: 关服/切档时按存档前缀丢弃增长游标，防止同 JVM 重进同档时漏跑当天增长。
+     */
+    public static void clearServerCaches(MinecraftServer server) {
+        String prefix = SaveScopedCacheKey.serverKey(server) + "|";
+        LAST_GROWTH_DAY_BY_LEVEL.keySet().removeIf(key -> key.startsWith(prefix));
     }
 
     /**

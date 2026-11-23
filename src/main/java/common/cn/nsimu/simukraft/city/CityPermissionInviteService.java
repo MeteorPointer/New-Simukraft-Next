@@ -10,6 +10,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -97,6 +98,13 @@ public final class CityPermissionInviteService {
         if (level != null && level.getGameTime() % 1200L == 0L) {
             cleanupExpired();
         }
+    }
+
+    /**
+     * clearServerCaches: 关服/切档时丢弃所有待响应邀请，旧会话的邀请不应残留到新档。
+     */
+    public static void clearServerCaches(MinecraftServer server) {
+        INVITES.clear();
     }
 
     // accept: 接受任命后再次通过城市服务写入目标权限。

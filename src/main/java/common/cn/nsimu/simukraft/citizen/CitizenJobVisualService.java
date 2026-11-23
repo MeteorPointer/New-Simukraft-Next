@@ -4,6 +4,7 @@ import common.cn.nsimu.simukraft.building.BuilderConstructionService;
 import common.cn.nsimu.simukraft.entity.CitizenEntity;
 import common.cn.nsimu.simukraft.job.CityJobType;
 import common.cn.nsimu.simukraft.planner.PlannerWorkService;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -80,6 +81,14 @@ public final class CitizenJobVisualService {
         if (citizenId != null) {
             MAIN_HAND_OVERRIDES.remove(citizenId);
         }
+    }
+
+    /**
+     * clearServerCaches: 关服/切档时清掉所有临时手持外观覆盖。
+     * 键是市民 UUID，旧档残留会长期占内存（RULES 是注册派生数据，不在此清）。
+     */
+    public static void clearServerCaches(MinecraftServer server) {
+        MAIN_HAND_OVERRIDES.clear();
     }
 
     /**

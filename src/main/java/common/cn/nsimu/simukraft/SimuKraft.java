@@ -441,6 +441,11 @@ public final class SimuKraft {
         CitizenWanderService.clearServerCaches(event.getServer());
         ResidentialRentService.clearServerCaches(event.getServer());
         HudSyncService.clearServerCaches(event.getServer());
+        // 以下缓存键为市民/邀请 UUID 或维度 id，不跨存档隔离，需在释放 serverKey 映射前显式清理。
+        CitizenVoiceService.clearServerCaches(event.getServer());
+        CitizenJobVisualService.clearServerCaches(event.getServer());
+        PopulationGrowthService.clearServerCaches(event.getServer());
+        CityPermissionInviteService.clearServerCaches(event.getServer());
         CommercialDefinitionLoader.clearCache();
         IndustrialDefinitionLoader.clearCache();
         MineralDrillingDefinitionLoader.clearCache();

@@ -5,6 +5,7 @@ import common.cn.nsimu.simukraft.entity.CitizenEntity;
 import common.cn.nsimu.simukraft.registry.ModItems;
 import common.cn.nsimu.simukraft.registry.ModSoundEvents;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
@@ -246,6 +247,16 @@ public final class CitizenVoiceService {
         }
         AMBIENT_LOCKS.put(levelKey, gameTime + AMBIENT_LOCK_TICKS);
         return true;
+    }
+
+    /**
+     * clearServerCaches: 关服/切档时清空语音冷却与环境音锁。
+     * 键是市民 UUID 或维度 id，不跨存档隔离，旧档残留会长期占内存，整体清掉最稳妥。
+     */
+    public static void clearServerCaches(MinecraftServer server) {
+        COOLDOWNS.clear();
+        AMBIENT_LOCKS.clear();
+        BUILD_NEARBY.clear();
     }
 
     static void clearLocksForTest() {

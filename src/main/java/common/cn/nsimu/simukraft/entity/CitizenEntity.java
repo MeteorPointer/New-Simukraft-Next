@@ -256,6 +256,10 @@ public class CitizenEntity extends PathfinderMob {
             rescueFromWall(false);
             // 实体每 tick 确保自己有 CitizenData，数据缺失时会自动补全。
             CitizenData data = CitizenService.ensureCitizen(serverLevel, this);
+            if (data == null) {
+                // 市民档案异步加载尚未落定，本拍跳过，等分帧消费到达该居民后再处理。
+                return;
+            }
             if (!serverLevel.dimension().identifier().toString().equals(data.dimensionId())) {
                 discard();
                 return;

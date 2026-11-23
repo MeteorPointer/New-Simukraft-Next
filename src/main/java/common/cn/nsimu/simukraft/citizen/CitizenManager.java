@@ -400,6 +400,14 @@ public final class CitizenManager extends SavedData {
         return citizens.values();
     }
 
+    /**
+     * isLoadSettled: 市民 SQLite 加载是否已落定（完成或失败降级）。
+     * 落定前内存里的市民表只是加载中间态，依赖全量快照的服务应本轮跳过。
+     */
+    public boolean isLoadSettled() {
+        return sqliteLoaded || sqliteLoadFailed;
+    }
+
     public long getCityPopulation(UUID cityId) {
         if (cityId == null) {
             return 0L;

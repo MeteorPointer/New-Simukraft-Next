@@ -352,28 +352,33 @@ public final class SimuKraft {
         event.getServer().getAllLevels().forEach(CityUpgradeService::tick);
         // CitizenManager 数据挂主世界，tick 只需对 overworld 执行一次，避免 N-1 次无效调用。
         ServerLevel overworld = event.getServer().overworld();
-        CitizenManager.get(overworld).tick(overworld);
-        event.getServer().getAllLevels().forEach(level -> {
-            CitizenNavigationService.tick(level);
-            CitizenWanderService.tick(level);
-            PlacedBuildingService.ensureCityPoisRegistered(level);
-            BuildingIntegrityService.tick(level);
-            CitizenHomeRestService.tick(level);
-            MedicalService.tick(level);
-            ExchangeMarketService.tick(level);
-            CitizenSelfFeedingService.tick(level);
-            BuilderConstructionService.tick(level);
-            PlannerWorkService.tick(level);
-            IndustrialWorkService.tick(level);
-            MineralDrillingWorkService.tick(level);
-            CommercialWorkService.tick(level);
-            LogisticsWorkService.tick(level);
-            PopulationGrowthService.tick(level);
-            ResidentialRentService.tick(level);
-            FarmlandFarmingService.tick(level);
-            HudSyncService.tick(level);
-            CityPermissionInviteService.tick(level);
-        });
+        CitizenManager citizenManager = CitizenManager.get(overworld);
+        citizenManager.tick(overworld);
+        // 市民异步加载尚未落定时跳过下列每维度服务：它们会遍历全量市民或按市民反查岗位/任务，
+        // 在加载中间态误判会错杀在途任务或重复生成居民。导航、区块 POI 注册等无关调度不受影响。
+        if (citizenManager.isLoadSettled()) {
+            event.getServer().getAllLevels().forEach(level -> {
+                CitizenNavigationService.tick(level);
+                CitizenWanderService.tick(level);
+                PlacedBuildingService.ensureCityPoisRegistered(level);
+                BuildingIntegrityService.tick(level);
+                CitizenHomeRestService.tick(level);
+                MedicalService.tick(level);
+                ExchangeMarketService.tick(level);
+                CitizenSelfFeedingService.tick(level);
+                BuilderConstructionService.tick(level);
+                PlannerWorkService.tick(level);
+                IndustrialWorkService.tick(level);
+                MineralDrillingWorkService.tick(level);
+                CommercialWorkService.tick(level);
+                LogisticsWorkService.tick(level);
+                PopulationGrowthService.tick(level);
+                ResidentialRentService.tick(level);
+                FarmlandFarmingService.tick(level);
+                HudSyncService.tick(level);
+                CityPermissionInviteService.tick(level);
+            });
+        }
         PlayerWelcomeService.tick(event.getServer());
         // 矿区建档队列只针对主世界，按服务器每拍限流消费，不随维度数量重复调用。
         VirtualVeinService.tick(event.getServer());

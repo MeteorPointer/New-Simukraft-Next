@@ -136,6 +136,11 @@ public final class CitizenManager extends SavedData {
         if (this.level != null && this.level != level) {
             return;
         }
+        // 分帧消费未完成时不落盘：此时 citizens 只是重建中间态，SQLite 本身已持有全量权威数据，
+        // 写残缺快照只会埋下"未来 saveAll 改回清空重写就丢居民"的隐患。
+        if (!isLoadSettled()) {
+            return;
+        }
         if (!citizens.isEmpty()) {
             SimuSqliteStorage.saveCitizens(level, citizenMetadataSnapshot());
         }
@@ -492,8 +497,10 @@ public final class CitizenManager extends SavedData {
         if (level == null || this.level != null && this.level != level) {
             return;
         }
-        // 先驱动异步加载进度，加载完成后才执行 AI 调度。
-        if (!tickSqliteLoad(level)) {
+        // 先推进异步分帧消费；只有"仍在加载中"才跳过。FAILED 降级态下 isLoadSettled 已为 true，
+        // 需像旧同步版一样继续对 SavedData 兜底居民跑 AI 与家庭系统，不能永久冻结。
+        tickSqliteLoad(level);
+        if (!isLoadSettled()) {
             return;
         }
         int processed = 0;

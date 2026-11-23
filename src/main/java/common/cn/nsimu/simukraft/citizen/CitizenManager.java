@@ -18,9 +18,13 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
@@ -35,6 +39,14 @@ public final class CitizenManager extends SavedData {
     private static final long HUNGER_DECAY_INTERVAL_TICKS = 7200L;
     private static final double HUNGER_DECAY_PER_UPDATE = 1.0D;
     private static final SavedDataType<CitizenManager> TYPE = createType();
+    // 居民 SQLite 读取走专用 IO 线程，避免主线程被 JDBC 阻塞。
+    private static final ExecutorService LOAD_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "simukraft-citizen-load");
+        t.setDaemon(true);
+        return t;
+    });
+    // APPLY_BUDGET_PER_TICK：每 tick 从加载结果中消费的最大居民数，分帧避免一次性重建全量档案卡住主线程。
+    private static final int APPLY_BUDGET_PER_TICK = 150;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static SavedDataType<CitizenManager> createType() {
@@ -60,12 +72,16 @@ public final class CitizenManager extends SavedData {
     private volatile boolean sqliteLoadFailed;
     private volatile ServerLevel level;
     private long lastFamilyTickDay = -1L;
+    // 异步加载状态：future 代表 DB 读取，pendingTags/applyIndex 代表主线程分帧消费。
+    private volatile CompletableFuture<CompoundTag> sqliteLoadFuture;
+    private ListTag pendingCitizenTags;
+    private int pendingApplyIndex;
 
     public static CitizenManager get(ServerLevel level) {
         ServerLevel storageLevel = storageLevel(level);
         CitizenManager manager = storageLevel.getDataStorage().computeIfAbsent(TYPE);
         manager.level = storageLevel;
-        manager.loadFromSqlite(storageLevel);
+        manager.startAsyncSqliteLoad(storageLevel);
         return manager;
     }
 
@@ -131,38 +147,80 @@ public final class CitizenManager extends SavedData {
         queuedAiCitizenIds.clear();
         sqliteLoaded = false;
         sqliteLoadFailed = false;
-        loadFromSqlite(storageLevel(level));
+        sqliteLoadFuture = null;
+        pendingCitizenTags = null;
+        pendingApplyIndex = 0;
+        startAsyncSqliteLoad(storageLevel(level));
     }
 
-    private synchronized void loadFromSqlite(ServerLevel level) {
+    /**
+     * startAsyncSqliteLoad: 把 SQLite 居民读取提交到 IO 线程，主线程不阻塞。
+     */
+    private synchronized void startAsyncSqliteLoad(ServerLevel level) {
+        if (sqliteLoaded || sqliteLoadFailed || sqliteLoadFuture != null) {
+            return;
+        }
+        sqliteLoadFuture = CompletableFuture.supplyAsync(() -> SimuSqliteStorage.loadCitizens(level), LOAD_EXECUTOR);
+    }
+
+    /**
+     * tickSqliteLoad: 在主线程分帧消费异步加载结果，每 tick 最多处理 APPLY_BUDGET_PER_TICK 个居民。
+     * 返回 true 表示加载已全部完成，可以继续 AI tick。
+     */
+    private boolean tickSqliteLoad(ServerLevel level) {
         if (sqliteLoaded || sqliteLoadFailed) {
-            return;
+            return sqliteLoaded;
         }
-        CompoundTag sqliteTag = SimuSqliteStorage.loadCitizens(level);
-        if (sqliteTag == null) {
-            /*
-             * 这里刻意不置 sqliteLoaded：它同时是 getOrCreate 的安全闸，
-             * 置位后实体会被当成"新居民"建档并覆盖库里的真实档案。
-             * 但必须记下失败，否则 get(level) 每 tick 都会重跑一次失败查询并刷一条 warn。
-             */
-            sqliteLoadFailed = true;
-            SimuKraft.LOGGER.warn("Simukraft: Citizen SQLite data was not loaded; entity-to-citizen fallback stays disabled this session to avoid overwriting jobs.");
-            return;
+        CompletableFuture<CompoundTag> future = sqliteLoadFuture;
+        if (future == null) {
+            return false;
         }
-        sqliteLoaded = true;
-        if (sqliteTag.isEmpty()) {
-            return;
+        // DB 读取尚未完成，继续等。
+        if (!future.isDone()) {
+            return false;
         }
-        ListTag citizensTag = sqliteTag.getList("Citizens").orElse(new ListTag());
-        if (citizensTag.isEmpty()) {
-            return;
+        // DB 读取完成，提取待消费列表。
+        if (pendingCitizenTags == null) {
+            try {
+                CompoundTag sqliteTag = future.join();
+                if (sqliteTag == null) {
+                    sqliteLoadFailed = true;
+                    sqliteLoadFuture = null;
+                    SimuKraft.LOGGER.warn("Simukraft: Citizen SQLite data was not loaded; entity-to-citizen fallback stays disabled this session to avoid overwriting jobs.");
+                    return false;
+                }
+                if (sqliteTag.isEmpty()) {
+                    sqliteLoaded = true;
+                    sqliteLoadFuture = null;
+                    return true;
+                }
+                ListTag citizensTag = sqliteTag.getList("Citizens").orElse(new ListTag());
+                if (citizensTag.isEmpty()) {
+                    sqliteLoaded = true;
+                    sqliteLoadFuture = null;
+                    return true;
+                }
+                // SQLite 加载后重建 AI 队列，保证旧存档居民也会继续参与状态 tick。
+                citizens.clear();
+                aiQueue.clear();
+                queuedAiCitizenIds.clear();
+                pendingCitizenTags = citizensTag;
+                pendingApplyIndex = 0;
+            } catch (CompletionException exception) {
+                sqliteLoadFailed = true;
+                sqliteLoadFuture = null;
+                SimuKraft.LOGGER.error("Simukraft: Citizen async SQLite load failed", exception);
+                return false;
+            }
         }
-        // SQLite 加载后重建 AI 队列，保证旧存档居民也会继续参与状态 tick。
-        citizens.clear();
-        aiQueue.clear();
-        queuedAiCitizenIds.clear();
-        for (int i = 0; i < citizensTag.size(); i++) {
-            CompoundTag citizenTag = citizensTag.getCompound(i).orElse(new CompoundTag());
+        // 分帧消费：每 tick 处理有限数量的居民
+        int budget = APPLY_BUDGET_PER_TICK;
+        ListTag tags = pendingCitizenTags;
+        int size = tags.size();
+        while (pendingApplyIndex < size && budget > 0) {
+            CompoundTag citizenTag = tags.getCompound(pendingApplyIndex).orElse(new CompoundTag());
+            pendingApplyIndex++;
+            budget--;
             boolean repairedDeadHousing = deadCitizenHasHome(citizenTag);
             CitizenData data = CitizenData.fromTag(citizenTag);
             boolean repaired = CitizenEmploymentService.repairLoadedEmployment(level, data);
@@ -177,6 +235,14 @@ public final class CitizenManager extends SavedData {
                 saveCitizenIncremental(data);
             }
         }
+        if (pendingApplyIndex >= size) {
+            sqliteLoaded = true;
+            sqliteLoadFuture = null;
+            pendingCitizenTags = null;
+            pendingApplyIndex = 0;
+            SimuKraft.LOGGER.info("Simukraft: Citizen loading complete ({} records applied)", size);
+        }
+        return sqliteLoaded;
     }
 
     private static boolean deadCitizenHasHome(CompoundTag tag) {
@@ -279,13 +345,8 @@ public final class CitizenManager extends SavedData {
         CitizenData data = citizens.get(entity.getUUID());
         if (data == null) {
             if (!sqliteLoaded) {
-                if (entity.level() instanceof ServerLevel serverLevel) {
-                    loadFromSqlite(serverLevel);
-                    data = citizens.get(entity.getUUID());
-                }
-                if (data == null && !sqliteLoaded) {
-                    return null;
-                }
+                // 异步加载中：不补建档案，等分帧消费到达该居民后由 tickSqliteLoad 落地。
+                return null;
             }
         }
         if (data == null) {
@@ -421,6 +482,10 @@ public final class CitizenManager extends SavedData {
 
     public void tick(ServerLevel level) {
         if (level == null || this.level != null && this.level != level) {
+            return;
+        }
+        // 先驱动异步加载进度，加载完成后才执行 AI 调度。
+        if (!tickSqliteLoad(level)) {
             return;
         }
         int processed = 0;

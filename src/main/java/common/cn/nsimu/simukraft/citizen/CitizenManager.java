@@ -156,6 +156,31 @@ public final class CitizenManager extends SavedData {
         pendingCitizenTags = null;
         pendingApplyIndex = 0;
         startAsyncSqliteLoad(storageLevel(level));
+        // reload 是"调用方要求立即可见"的同步入口（如 /simukraft reload），与其它 Manager 一致读回后再返回；
+        // 启动路径仍走异步分帧，不受影响。用主世界保证与异步 tick 路径的 repairLoadedEmployment 维度一致。
+        finishSqliteLoadSync(storageLevel(level));
+    }
+
+    /**
+     * finishSqliteLoadSync: 阻塞等待 IO 读完成后一次性消费到落定，供 reload 等同步入口使用。
+     * 大世界这里会同步占用调用线程，但 reload 本就是管理员低频操作，语义与旧同步版一致。
+     */
+    private void finishSqliteLoadSync(ServerLevel level) {
+        while (!isLoadSettled()) {
+            CompletableFuture<CompoundTag> future = sqliteLoadFuture;
+            if (future == null) {
+                // 无在途读取且仍未落定：不应发生，主动退出避免忙等。
+                break;
+            }
+            if (!future.isDone()) {
+                try {
+                    future.join();
+                } catch (CompletionException ignored) {
+                    // 失败统一交给 tickSqliteLoad 置位 sqliteLoadFailed。
+                }
+            }
+            tickSqliteLoad(level);
+        }
     }
 
     /**
@@ -169,8 +194,8 @@ public final class CitizenManager extends SavedData {
     }
 
     /**
-     * tickSqliteLoad: 在主线程分帧消费异步加载结果，每 tick 最多处理 APPLY_BUDGET_PER_TICK 个居民。
-     * 返回 true 表示加载已全部完成，可以继续 AI tick。
+     * tickSqliteLoad: 在主线程按 APPLY_BUDGET_PER_TICK 分帧推进 DB 读取结果的消费。
+     * 调用方以 isLoadSettled() 判定是否已落定，不依赖本方法返回值（返回仅供内部/调试参考）。
      */
     private boolean tickSqliteLoad(ServerLevel level) {
         if (sqliteLoaded || sqliteLoadFailed) {

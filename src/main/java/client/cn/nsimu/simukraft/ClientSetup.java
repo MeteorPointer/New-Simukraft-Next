@@ -111,6 +111,7 @@ public final class ClientSetup {
                 && minecraft.player != null && minecraft.gui.screen() == null) {
             MailClientState.open();
         }
+        MailClientState.tick();
         if (SimuMapManager.isAvailable()) {
             SimuMapManager.getInstance().tick();
         }

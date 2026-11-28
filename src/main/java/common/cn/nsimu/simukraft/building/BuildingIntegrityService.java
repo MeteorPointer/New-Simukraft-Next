@@ -1,7 +1,6 @@
 package common.cn.nsimu.simukraft.building;
 
 import common.cn.nsimu.simukraft.SimuKraft;
-import common.cn.nsimu.simukraft.city.CityService;
 import common.cn.nsimu.simukraft.config.ServerConfig;
 import common.cn.nsimu.simukraft.economy.EconomyService;
 import common.cn.nsimu.simukraft.economy.FinanceGateway;

@@ -37,12 +37,18 @@ public class SimuMapManager {
     // 区块加载改为限流补采：避免进入世界时成批区块在主线程同步全量采样导致严重卡顿。
     private static final int CHUNK_LOAD_SCAN_BUDGET_PER_TICK = 4;
     private static final int MAX_PENDING_CHUNK_SCANS = 4096;
-    /** 每拍最多提交几个脏 region 给后台烘图，旧实现一次性把全部脏 region 灌进无界队列。 */
+    /**
+     * 每拍最多提交几个脏 region 给后台烘图，旧实现一次性把全部脏 region 灌进无界队列。
+     */
     private static final int REGION_BAKE_BUDGET_PER_TICK = 2;
     private static final int MAX_REGION_BAKES_IN_FLIGHT = 6;
-    /** 一次绘制窗口内允许同步上传的 region 纹理数，剩下的帧继续用旧纹理。 */
+    /**
+     * 一次绘制窗口内允许同步上传的 region 纹理数，剩下的帧继续用旧纹理。
+     */
     private static final int TEXTURE_UPLOAD_BUDGET_PER_FRAME = 2;
-    /** 磁盘 region 按需加载的并发上限，每个文件是 512x512 的地形数据。 */
+    /**
+     * 磁盘 region 按需加载的并发上限，每个文件是 512x512 的地形数据。
+     */
     private static final int MAX_REGION_LOADS_IN_FLIGHT = 3;
     private static final int REGION_LIST_REFRESH_TICKS = 1200;
     /**

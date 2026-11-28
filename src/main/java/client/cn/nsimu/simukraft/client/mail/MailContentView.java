@@ -76,7 +76,9 @@ final class MailContentView {
         return category == MailCategory.SYSTEM && !messages.isEmpty() ? messages.get(Math.min(selectedMail, messages.size() - 1)) : null;
     }
 
-    /** 最近一封别人发来的消息，用作默认回复对象。 */
+    /**
+     * 最近一封别人发来的消息，用作默认回复对象。
+     */
     MailMessageData latestIncoming() {
         for (int i = messages.size() - 1; i >= 0; i--) {
             if (!messages.get(i).outgoing()) return messages.get(i);
@@ -193,7 +195,8 @@ final class MailContentView {
     private void drawHeader(GuiGraphicsExtractor graphics, Font font, MailMessageData message, int areaX, int top, Bubble bubble, int[] area) {
         Component name = message.outgoing() ? Component.translatable("screen.simukraft.mail.me") : message.sender();
         Component header = Component.empty();
-        if (message.broadcast()) header = header.copy().append(Component.translatable("screen.simukraft.mail.broadcast_tag")).append(" ");
+        if (message.broadcast())
+            header = header.copy().append(Component.translatable("screen.simukraft.mail.broadcast_tag")).append(" ");
         header = header.copy().append(name).append(Component.literal("  ")).append(MailScreen.dayLabel(message.timestamp()));
         int width = font.width(header);
         int x = message.outgoing() ? areaX + bubble.x() + bubble.width() - width : areaX + bubble.x();
@@ -212,13 +215,17 @@ final class MailContentView {
         drawContactAvatar(graphics, message.senderKey(), x, y, size);
     }
 
-    /** 玩家自己的头像是真实皮肤，取皮肤纹理的头部正面与帽子两层直接 blit。 */
+    /**
+     * 玩家自己的头像是真实皮肤，取皮肤纹理的头部正面与帽子两层直接 blit。
+     */
     private static void drawPlayerHead(GuiGraphicsExtractor graphics, Identifier skin, int x, int y, int size) {
         graphics.blit(RenderPipelines.GUI_TEXTURED, skin, x, y, 8.0F, 8.0F, size, size, 8, 8, 64, 64);
         graphics.blit(RenderPipelines.GUI_TEXTURED, skin, x, y, 40.0F, 8.0F, size, size, 8, 8, 64, 64);
     }
 
-    /** 按名片 key 画头像：市民画皮肤脸，城市和系统画图标。 */
+    /**
+     * 按名片 key 画头像：市民画皮肤脸，城市和系统画图标。
+     */
     static void drawContactAvatar(GuiGraphicsExtractor graphics, String key, int x, int y, int size) {
         if (key != null && key.startsWith(MailCategory.CITIZEN_PREFIX)) {
             MailContactData contact = MailClientState.contact(key);
@@ -232,7 +239,9 @@ final class MailContentView {
                 size - inset * 2, size - inset * 2, 16, 16, 16, 16);
     }
 
-    /** 九宫格绘制气泡：四角和边框保持原始粗细，只拉伸中间，避免整张贴图被拉变形。 */
+    /**
+     * 九宫格绘制气泡：四角和边框保持原始粗细，只拉伸中间，避免整张贴图被拉变形。
+     */
     private static void drawBubble(GuiGraphicsExtractor graphics, int x, int y, int width, int height, boolean outgoing) {
         int u = outgoing ? OUTGOING_U : INCOMING_U;
         int sb = BUBBLE_SOURCE_BORDER;
@@ -308,7 +317,9 @@ final class MailContentView {
 
     // ── 交互 ───────────────────────────────────────────────────────────────────
 
-    /** 点击气泡返回其名片 key；点击系统邮件行切换正文并返回 "system"；未命中返回 null。 */
+    /**
+     * 点击气泡返回其名片 key；点击系统邮件行切换正文并返回 "system"；未命中返回 null。
+     */
     String click(Font font, MailScreenLayout layout, double mouseX, double mouseY) {
         if (category == MailCategory.SYSTEM) {
             int[] list = layout.rect(MailScreenLayout.SYSTEM_LIST);
@@ -335,7 +346,9 @@ final class MailContentView {
         return null;
     }
 
-    /** 鼠标滚轮：系统标签在列表上滚动列表，其余位置滚动正文。 */
+    /**
+     * 鼠标滚轮：系统标签在列表上滚动列表，其余位置滚动正文。
+     */
     void scroll(Font font, MailScreenLayout layout, double mouseX, double mouseY, double amount) {
         if (category == MailCategory.SYSTEM && layout.contains(MailScreenLayout.SYSTEM_LIST, mouseX, mouseY)) {
             int[] list = layout.rect(MailScreenLayout.SYSTEM_LIST);

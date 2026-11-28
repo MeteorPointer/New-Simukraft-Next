@@ -3,8 +3,6 @@ package common.cn.nsimu.simukraft.economy;
 import common.cn.nsimu.simukraft.SimuKraft;
 import common.cn.nsimu.simukraft.city.CityData;
 import common.cn.nsimu.simukraft.city.CityManager;
-import common.cn.nsimu.simukraft.city.CityService;
-import common.cn.nsimu.simukraft.city.FinanceTransactionData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 

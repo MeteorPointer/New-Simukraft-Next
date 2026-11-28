@@ -26,7 +26,9 @@ public class SimuMapRegion {
     private Identifier textureLocation;
     private volatile boolean textureNeedsUpload = false;
     private volatile boolean imageLoaded = false;
-    /** 图像刚建立时被清零，只有整幅重烘才不会留空洞。 */
+    /**
+     * 图像刚建立时被清零，只有整幅重烘才不会留空洞。
+     */
     private boolean fullBakeRequested = true;
     private long lastAccessTime;
 

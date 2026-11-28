@@ -666,6 +666,7 @@ public final class SimuMigrations {
             return false;
         }
     }
+
     /**
      * v16：邮件、玩家教程状态和邮件调度游标。旧版邮件只在内存里，没有需要搬迁的数据。
      */

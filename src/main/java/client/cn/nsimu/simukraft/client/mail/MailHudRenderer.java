@@ -7,7 +7,9 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
-/** 在游戏 HUD 左上角绘制邮件图标及未读提示动画。 */
+/**
+ * 在游戏 HUD 左上角绘制邮件图标及未读提示动画。
+ */
 public final class MailHudRenderer {
     private static final Identifier READ_ICON = Identifier.fromNamespaceAndPath(
             SimuKraft.MOD_ID, "textures/gui/mail.png");

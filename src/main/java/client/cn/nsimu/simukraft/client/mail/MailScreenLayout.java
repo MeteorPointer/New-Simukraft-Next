@@ -15,12 +15,18 @@ final class MailScreenLayout {
     static final int SOURCE_WIDTH = 1920;
     static final int SOURCE_HEIGHT = 1080;
 
-    /** 左侧分类列表：三行等分 237..968，顺序和 MailCategory 一致（市民、系统、城市）。 */
+    /**
+     * 左侧分类列表：三行等分 237..968，顺序和 MailCategory 一致（市民、系统、城市）。
+     */
     static final int[][] CATEGORY_ROWS = {{80, 237, 164, 243}, {80, 480, 164, 243}, {80, 723, 164, 245}};
-    /** 列表滑动条的上下按钮，位置和尺寸取自背景里烘好的 68x59 按钮。 */
+    /**
+     * 列表滑动条的上下按钮，位置和尺寸取自背景里烘好的 68x59 按钮。
+     */
     static final int[] LIST_SCROLL_UP = {10, 237, 68, 59};
     static final int[] LIST_SCROLL_DOWN = {10, 910, 68, 59};
-    /** 滑块行程：轨道 296..909，滑块高 84（取自素材 55x84）。 */
+    /**
+     * 滑块行程：轨道 296..909，滑块高 84（取自素材 55x84）。
+     */
     static final int[] LIST_THUMB = {16, 296, 55, 84};
     static final int LIST_THUMB_TRAVEL = 529;
 
@@ -54,7 +60,9 @@ final class MailScreenLayout {
         return Math.round(sourceY * (float) height / SOURCE_HEIGHT);
     }
 
-    /** 把素材矩形换算成 GUI 坐标 {x, y, w, h}。 */
+    /**
+     * 把素材矩形换算成 GUI 坐标 {x, y, w, h}。
+     */
     int[] rect(int[] source) {
         int x0 = x(source[0]);
         int y0 = y(source[1]);

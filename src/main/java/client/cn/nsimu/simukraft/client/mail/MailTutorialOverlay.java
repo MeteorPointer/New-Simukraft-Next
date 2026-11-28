@@ -35,7 +35,9 @@ final class MailTutorialOverlay {
     private static final int BOX_HEIGHT = 66;
     private static final int TEXT_COLOR = 0xFFF2FBFB;
 
-    /** 聚光灯对准的界面区域。 */
+    /**
+     * 聚光灯对准的界面区域。
+     */
     enum Target {
         NONE, HUD_ICON, ROW_CITIZEN, ROW_SYSTEM, ROW_CITY, CONTENT, INFO_PANEL, INPUT
     }
@@ -43,7 +45,9 @@ final class MailTutorialOverlay {
     record Step(String textKey, Target target) {
     }
 
-    /** 由宿主把目标换算成 GUI 坐标 {x, y, w, h}；返回 null 表示不挖洞。 */
+    /**
+     * 由宿主把目标换算成 GUI 坐标 {x, y, w, h}；返回 null 表示不挖洞。
+     */
     interface TargetResolver {
         int[] bounds(Target target);
     }
@@ -73,7 +77,9 @@ final class MailTutorialOverlay {
         return finished() ? Target.NONE : steps.get(index).target();
     }
 
-    /** 点击或按键：正在打字时先显示整句，否则进入下一步。返回 true 表示全部步骤结束。 */
+    /**
+     * 点击或按键：正在打字时先显示整句，否则进入下一步。返回 true 表示全部步骤结束。
+     */
     boolean advance() {
         if (finished()) return true;
         long now = System.currentTimeMillis();
@@ -121,7 +127,9 @@ final class MailTutorialOverlay {
         return count;
     }
 
-    /** 每露出两个可发音字符播放一次说话音，标点和空白不发音。 */
+    /**
+     * 每露出两个可发音字符播放一次说话音，标点和空白不发音。
+     */
     private void playVoice(int visible) {
         while (soundedChars < visible) {
             char c = text.charAt(soundedChars);
@@ -198,7 +206,9 @@ final class MailTutorialOverlay {
         graphics.pose().popMatrix();
     }
 
-    /** 圆角矩形在某一行的半宽；该行不与形状相交时返回 -1。 */
+    /**
+     * 圆角矩形在某一行的半宽；该行不与形状相交时返回 -1。
+     */
     private static double halfWidth(double halfW, double halfH, double radius, double dy) {
         double y = Math.abs(dy);
         if (y >= halfH) return -1.0D;

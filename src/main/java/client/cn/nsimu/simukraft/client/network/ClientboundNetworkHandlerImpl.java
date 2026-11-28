@@ -20,6 +20,7 @@ import client.cn.nsimu.simukraft.client.hire.NpcHireScreen;
 import client.cn.nsimu.simukraft.client.industrial.IndustrialControlBoxScreenOpener;
 import client.cn.nsimu.simukraft.client.logistics.LogisticsClientBoxScreenOpener;
 import client.cn.nsimu.simukraft.client.logistics.LogisticsServerBoxScreenOpener;
+import client.cn.nsimu.simukraft.client.mail.MailClientState;
 import client.cn.nsimu.simukraft.client.manifest.ManifestScreen;
 import client.cn.nsimu.simukraft.client.medical.MedicalControlBoxScreenOpener;
 import client.cn.nsimu.simukraft.client.path.NpcPathDebugRenderer;
@@ -53,6 +54,7 @@ import common.cn.nsimu.simukraft.network.industrial.IndustrialControlBoxViewUpda
 import common.cn.nsimu.simukraft.network.logistics.LogisticsClientBoxOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.logistics.LogisticsServerBoxOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.logistics.LogisticsWarehouseGridResponsePacket;
+import common.cn.nsimu.simukraft.network.mail.MailStatePacket;
 import common.cn.nsimu.simukraft.network.manifest.ManifestHeldOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.manifest.ManifestOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.medical.MedicalControlBoxOpenResponsePacket;
@@ -64,8 +66,6 @@ import common.cn.nsimu.simukraft.network.rts.RtsBuildingBoundsSyncPacket;
 import common.cn.nsimu.simukraft.network.rts.RtsConstructionPreviewSyncPacket;
 import common.cn.nsimu.simukraft.network.rts.RtsLogisticsRoutesSyncPacket;
 import common.cn.nsimu.simukraft.network.toast.InfoToastPacket;
-import common.cn.nsimu.simukraft.network.mail.MailStatePacket;
-import client.cn.nsimu.simukraft.client.mail.MailClientState;
 import net.minecraft.client.Minecraft;
 
 import java.util.Map;

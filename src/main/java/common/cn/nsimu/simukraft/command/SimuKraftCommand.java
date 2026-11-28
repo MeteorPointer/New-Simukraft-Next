@@ -342,7 +342,9 @@ public final class SimuKraftCommand {
                                         .executes(context -> resetMailTutorial(context.getSource()))))));
     }
 
-    /** 发送一封测试邮件，验证服务端状态同步和客户端 HUD 提示。 */
+    /**
+     * 发送一封测试邮件，验证服务端状态同步和客户端 HUD 提示。
+     */
     private static int testMail(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -354,7 +356,9 @@ public final class SimuKraftCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    /** 重置执行者的邮件教程状态，下次收到邮件时重新弹出。 */
+    /**
+     * 重置执行者的邮件教程状态，下次收到邮件时重新弹出。
+     */
     private static int resetMailTutorial(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -366,7 +370,9 @@ public final class SimuKraftCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    /** 通过等额入账和扣款验证财政网关及流水，保持城市资金净额不变。 */
+    /**
+     * 通过等额入账和扣款验证财政网关及流水，保持城市资金净额不变。
+     */
     private static int testFinanceGateway(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {
@@ -392,7 +398,9 @@ public final class SimuKraftCommand {
         return Command.SINGLE_SUCCESS;
     }
 
-    /** 立即发送执行者所属城市的结算测试邮件。 */
+    /**
+     * 立即发送执行者所属城市的结算测试邮件。
+     */
     private static int testFinanceReport(CommandSourceStack source) {
         ServerPlayer player = source.getPlayer();
         if (player == null) {

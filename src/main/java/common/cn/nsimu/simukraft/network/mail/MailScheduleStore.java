@@ -6,7 +6,9 @@ import net.minecraft.server.MinecraftServer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** 邮件调度游标（周报已发周数、市民诉求冷却日），按服务器缓存并写回 SQLite。仅本包使用。 */
+/**
+ * 邮件调度游标（周报已发周数、市民诉求冷却日），按服务器缓存并写回 SQLite。仅本包使用。
+ */
 final class MailScheduleStore {
     private static final ConcurrentHashMap<MinecraftServer, Map<String, Long>> VALUES = new ConcurrentHashMap<>();
 

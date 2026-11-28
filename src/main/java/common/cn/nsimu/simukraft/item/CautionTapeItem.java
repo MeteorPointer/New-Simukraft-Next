@@ -27,7 +27,9 @@ import java.util.List;
  */
 public final class CautionTapeItem extends BlockItem {
     public static final int USES_PER_ROLL = 50;
-    /** 一格警戒线占用（也即回收）的使用次数，与铺设时 consumeUse 的步长一致。 */
+    /**
+     * 一格警戒线占用（也即回收）的使用次数，与铺设时 consumeUse 的步长一致。
+     */
     public static final int USES_PER_SEGMENT = 1;
 
     private final Block tapeBlock;

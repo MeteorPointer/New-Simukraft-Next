@@ -8,7 +8,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-/** 玩家在邮件界面回复市民或城市；服务端重新校验回复对象、分类、长度和频率。 */
+/**
+ * 玩家在邮件界面回复市民或城市；服务端重新校验回复对象、分类、长度和频率。
+ */
 public record MailReplyPacket(MailCategory category, String targetKey, String text) implements CustomPacketPayload {
     public static final Type<MailReplyPacket> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(SimuKraft.MOD_ID, "mail_reply"));

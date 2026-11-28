@@ -2,7 +2,6 @@ package common.cn.nsimu.simukraft.network.planner;
 
 import common.cn.nsimu.simukraft.SimuKraft;
 import common.cn.nsimu.simukraft.citizen.CitizenWorkStatus;
-import common.cn.nsimu.simukraft.city.CityService;
 import common.cn.nsimu.simukraft.city.group.CityGroupMessageService;
 import common.cn.nsimu.simukraft.config.ServerConfig;
 import common.cn.nsimu.simukraft.economy.EconomyService;

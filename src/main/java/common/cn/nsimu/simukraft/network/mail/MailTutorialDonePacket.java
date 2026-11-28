@@ -8,7 +8,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-/** 客户端看完或跳过邮件教程后通知服务端，服务端记入存档，之后不再弹出。 */
+/**
+ * 客户端看完或跳过邮件教程后通知服务端，服务端记入存档，之后不再弹出。
+ */
 public record MailTutorialDonePacket() implements CustomPacketPayload {
     public static final Type<MailTutorialDonePacket> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(SimuKraft.MOD_ID, "mail_tutorial_done"));

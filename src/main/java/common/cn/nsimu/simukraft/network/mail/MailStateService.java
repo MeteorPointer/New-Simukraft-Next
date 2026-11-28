@@ -1,11 +1,11 @@
 package common.cn.nsimu.simukraft.network.mail;
 
+import com.google.gson.JsonElement;
+import com.mojang.serialization.JsonOps;
 import common.cn.nsimu.simukraft.SimuKraft;
 import common.cn.nsimu.simukraft.config.ServerConfig;
 import common.cn.nsimu.simukraft.storage.MailSqliteRepository;
 import common.cn.nsimu.simukraft.storage.SimuSqliteStorage;
-import com.google.gson.JsonElement;
-import com.mojang.serialization.JsonOps;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
@@ -14,11 +14,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.GsonHelper;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
@@ -30,7 +26,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * 离线玩家的邮件先挂在 pending 里，登录读库时与库里的行按 id 合并，避免读到尚未落库的写入。
  */
 public final class MailStateService {
-    /** 单条回复的最大字符数。 */
+    /**
+     * 单条回复的最大字符数。
+     */
     public static final int MAX_REPLY_LENGTH = 160;
     static final int MAX_BROADCASTS = 32;
     private static final long REPLY_COOLDOWN_TICKS = 20L;
@@ -39,19 +37,25 @@ public final class MailStateService {
     private MailStateService() {
     }
 
-    /** 登录时读档并同步邮件状态。 */
+    /**
+     * 登录时读档并同步邮件状态。
+     */
     public static void syncToPlayer(ServerPlayer player) {
         if (player != null) send(player);
     }
 
-    /** 向玩家投递一封系统邮件；必须在服务端主线程调用。 */
+    /**
+     * 向玩家投递一封系统邮件；必须在服务端主线程调用。
+     */
     public static int addSystemMail(ServerPlayer player, Component sender, Component subject, Component body) {
         if (player == null) return 0;
         deliver(player.level().getServer(), player.getUUID(), MailCategory.SYSTEM, MailCategory.SYSTEM_KEY, sender, subject, body, true);
         return unreadCount(player.level().getServer(), player.getUUID());
     }
 
-    /** 调试来信：增加一封系统邮件并立即同步。 */
+    /**
+     * 调试来信：增加一封系统邮件并立即同步。
+     */
     public static int receiveTest(ServerPlayer player) {
         return addSystemMail(player, Component.translatable("mail.simukraft.sender.information_system"),
                 Component.translatable("mail.simukraft.test.subject"), Component.translatable("mail.simukraft.test.body"));
@@ -71,7 +75,9 @@ public final class MailStateService {
         if (online != null) send(online);
     }
 
-    /** 全服广播一条城市动态；广播不计未读，发给所有在线玩家。 */
+    /**
+     * 全服广播一条城市动态；广播不计未读，发给所有在线玩家。
+     */
     public static void broadcast(MinecraftServer server, MailCategory category, String senderKey,
                                  Component sender, Component subject, Component body) {
         if (server == null) return;
@@ -90,7 +96,9 @@ public final class MailStateService {
         }
     }
 
-    /** 玩家在邮件界面查看某个标签页后，由服务端把该分类标为已读；其他分类保持未读。 */
+    /**
+     * 玩家在邮件界面查看某个标签页后，由服务端把该分类标为已读；其他分类保持未读。
+     */
     public static void markRead(ServerPlayer player, MailCategory category) {
         if (player == null || category == null) return;
         Mailbox box = mailbox(player.level().getServer(), player.getUUID());
@@ -104,7 +112,9 @@ public final class MailStateService {
         send(player);
     }
 
-    /** 处理玩家回复：服务端重新校验分类、对象、长度和频率，客户端只提交请求。 */
+    /**
+     * 处理玩家回复：服务端重新校验分类、对象、长度和频率，客户端只提交请求。
+     */
     public static void reply(ServerPlayer player, MailCategory category, String targetKey, String rawText) {
         if (player == null || category == null || !category.allowsReply()) return;
         String text = sanitize(rawText);
@@ -131,7 +141,9 @@ public final class MailStateService {
         send(player);
     }
 
-    /** 记录玩家已看完邮件教程。 */
+    /**
+     * 记录玩家已看完邮件教程。
+     */
     public static void completeTutorial(ServerPlayer player) {
         if (player == null) return;
         Mailbox box = mailbox(player.level().getServer(), player.getUUID());
@@ -141,7 +153,9 @@ public final class MailStateService {
         send(player);
     }
 
-    /** 调试用：让玩家下次收到邮件时重新看教程。 */
+    /**
+     * 调试用：让玩家下次收到邮件时重新看教程。
+     */
     public static void resetTutorial(ServerPlayer player) {
         if (player == null) return;
         mailbox(player.level().getServer(), player.getUUID()).tutorialDone = false;
@@ -149,7 +163,9 @@ public final class MailStateService {
         send(player);
     }
 
-    /** 玩家下线时清理回复频率记录；邮箱缓存保留到关服，保证离线投递与读库一致。 */
+    /**
+     * 玩家下线时清理回复频率记录；邮箱缓存保留到关服，保证离线投递与读库一致。
+     */
     public static void clearPlayer(ServerPlayer player) {
         if (player != null) {
             ServerMail state = SERVERS.get(player.level().getServer());
@@ -157,7 +173,9 @@ public final class MailStateService {
         }
     }
 
-    /** 关服或切档时丢掉本服全部邮件缓存。 */
+    /**
+     * 关服或切档时丢掉本服全部邮件缓存。
+     */
     public static void clearServerCaches(MinecraftServer server) {
         if (server != null) SERVERS.remove(server);
         MailScheduleStore.clearServerCaches(server);

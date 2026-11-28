@@ -15,23 +15,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.BiomeResolver;
-import net.minecraft.world.level.biome.BiomeSource;
-import net.minecraft.world.level.biome.Climate;
-import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
+import net.minecraft.world.level.biome.*;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
@@ -47,7 +36,9 @@ public final class VirtualVeinService {
     // 区块建档改为限流：进世界时成批区块不能在同一帧各做一次气候采样和数据库往返。
     private static final int FIELD_INIT_CHUNK_BUDGET_PER_TICK = 8;
     private static final int MAX_PENDING_FIELD_INIT_CHUNKS = 4096;
-    /** 按最近使用淘汰的矿区缓存；旧实现满 512 就整体清空，跑图时会反复回落数据库。 */
+    /**
+     * 按最近使用淘汰的矿区缓存；旧实现满 512 就整体清空，跑图时会反复回落数据库。
+     */
     private static final LinkedHashMap<CacheKey, VirtualVeinFieldProfile> FIELD_CACHE =
             new LinkedHashMap<>(256, 0.75F, true) {
                 @Override
@@ -58,7 +49,9 @@ public final class VirtualVeinService {
     // 待建档区块队列（打包坐标），只在服务端主线程消费；超限丢弃，由玩家实际查询时按需建档兜底。
     private static final Queue<Long> PENDING_FIELD_INIT_CHUNKS = new ConcurrentLinkedQueue<>();
     private static final Set<Long> PENDING_FIELD_INIT_KEYS = ConcurrentHashMap.newKeySet();
-    /** 气候采样器、群系解析器和气候参数表按存档加维度长期复用；26.3 每次 createClimateSampler 都是新建对象。 */
+    /**
+     * 气候采样器、群系解析器和气候参数表按存档加维度长期复用；26.3 每次 createClimateSampler 都是新建对象。
+     */
     private static final ConcurrentMap<String, ClimateAccess> CLIMATE_ACCESS_CACHE = new ConcurrentHashMap<>();
 
     private VirtualVeinService() {

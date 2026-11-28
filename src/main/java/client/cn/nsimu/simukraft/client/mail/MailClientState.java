@@ -1,11 +1,6 @@
 package client.cn.nsimu.simukraft.client.mail;
 
-import common.cn.nsimu.simukraft.network.mail.MailCategory;
-import common.cn.nsimu.simukraft.network.mail.MailContactData;
-import common.cn.nsimu.simukraft.network.mail.MailMarkReadPacket;
-import common.cn.nsimu.simukraft.network.mail.MailMessageData;
-import common.cn.nsimu.simukraft.network.mail.MailStatePacket;
-import common.cn.nsimu.simukraft.network.mail.MailTutorialDonePacket;
+import common.cn.nsimu.simukraft.network.mail.*;
 import net.minecraft.client.Minecraft;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
@@ -13,7 +8,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 保存服务端下发的邮件快照，并提供打开邮件界面和教程的入口。客户端只读，不改权威数据。 */
+/**
+ * 保存服务端下发的邮件快照，并提供打开邮件界面和教程的入口。客户端只读，不改权威数据。
+ */
 public final class MailClientState {
     private static volatile int unreadCount;
     private static volatile long shakeStartedAt = -1L;
@@ -51,7 +48,9 @@ public final class MailClientState {
         if (tutorialPending && !messages.isEmpty() && !tutorialShownThisSession) tutorialRequested = true;
     }
 
-    /** 客户端 tick：没有其他界面时弹出教程。 */
+    /**
+     * 客户端 tick：没有其他界面时弹出教程。
+     */
     public static void tick() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!tutorialRequested || minecraft.player == null || minecraft.gui.screen() != null) return;
@@ -60,7 +59,9 @@ public final class MailClientState {
         minecraft.gui.setScreen(new MailTutorialScreen());
     }
 
-    /** 教程看完或跳过：通知服务端写入存档。 */
+    /**
+     * 教程看完或跳过：通知服务端写入存档。
+     */
     public static void finishTutorial() {
         tutorialPending = false;
         tutorialRequested = false;
@@ -92,7 +93,9 @@ public final class MailClientState {
         return unreadCount > 0;
     }
 
-    /** 返回基于客户端毫秒时钟的平滑左右位移，动画最多持续一秒。 */
+    /**
+     * 返回基于客户端毫秒时钟的平滑左右位移，动画最多持续一秒。
+     */
     public static float shakeOffset(long now) {
         long started = shakeStartedAt;
         if (unreadCount <= 0 || started < 0L) {
@@ -107,7 +110,9 @@ public final class MailClientState {
         return (float) (Math.sin(elapsed * (Math.PI * 2.0D / 650.0D)) * 2.5D * envelope);
     }
 
-    /** 打开邮件界面并请求服务端标记已读；教程还没看完时在邮件界面里继续引导。 */
+    /**
+     * 打开邮件界面并请求服务端标记已读；教程还没看完时在邮件界面里继续引导。
+     */
     public static void open() {
         boolean withTutorial = tutorialPending;
         if (withTutorial) {
@@ -121,7 +126,9 @@ public final class MailClientState {
         return tutorialPending;
     }
 
-    /** 打开邮件界面；withTutorial 为 true 时继续邮件内的教程步骤。已读由界面按正在查看的标签页逐类请求。 */
+    /**
+     * 打开邮件界面；withTutorial 为 true 时继续邮件内的教程步骤。已读由界面按正在查看的标签页逐类请求。
+     */
     public static void open(boolean withTutorial) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) {
@@ -130,7 +137,9 @@ public final class MailClientState {
         minecraft.gui.setScreen(new MailScreen(withTutorial));
     }
 
-    /** 某个分类里有没有自己的未读邮件，用于左侧分类行的来信图标。 */
+    /**
+     * 某个分类里有没有自己的未读邮件，用于左侧分类行的来信图标。
+     */
     public static boolean hasUnread(MailCategory category) {
         for (MailMessageData message : messages) {
             if (message.category() == category && message.countsAsUnread()) return true;
@@ -138,7 +147,9 @@ public final class MailClientState {
         return false;
     }
 
-    /** 请求服务端把正在查看的分类标为已读；结果以服务端回传的快照为准。 */
+    /**
+     * 请求服务端把正在查看的分类标为已读；结果以服务端回传的快照为准。
+     */
     static void requestMarkRead(MailCategory category) {
         if (hasUnread(category)) {
             ClientPacketDistributor.sendToServer(new MailMarkReadPacket(category));

@@ -25,6 +25,7 @@ import common.cn.nsimu.simukraft.network.industrial.IndustrialControlBoxViewUpda
 import common.cn.nsimu.simukraft.network.logistics.LogisticsClientBoxOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.logistics.LogisticsServerBoxOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.logistics.LogisticsWarehouseGridResponsePacket;
+import common.cn.nsimu.simukraft.network.mail.MailStatePacket;
 import common.cn.nsimu.simukraft.network.manifest.ManifestHeldOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.manifest.ManifestOpenResponsePacket;
 import common.cn.nsimu.simukraft.network.medical.MedicalControlBoxOpenResponsePacket;
@@ -36,7 +37,6 @@ import common.cn.nsimu.simukraft.network.rts.RtsBuildingBoundsSyncPacket;
 import common.cn.nsimu.simukraft.network.rts.RtsConstructionPreviewSyncPacket;
 import common.cn.nsimu.simukraft.network.rts.RtsLogisticsRoutesSyncPacket;
 import common.cn.nsimu.simukraft.network.toast.InfoToastPacket;
-import common.cn.nsimu.simukraft.network.mail.MailStatePacket;
 
 /**
  * ClientboundNetworkHandler: 客户端网络响应处理抽象，避免 common 网络包直接依赖客户端实现。
@@ -219,7 +219,9 @@ public interface ClientboundNetworkHandler {
     default void handleInfoToast(InfoToastPacket packet) {
     }
 
-    /** 处理邮件未读状态同步。 */
+    /**
+     * 处理邮件未读状态同步。
+     */
     default void handleMailState(MailStatePacket packet) {
     }
 

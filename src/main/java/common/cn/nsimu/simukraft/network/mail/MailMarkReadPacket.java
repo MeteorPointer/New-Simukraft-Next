@@ -8,7 +8,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-/** 客户端查看某个邮件标签页后，请求服务端把该分类里自己的邮件标为已读。 */
+/**
+ * 客户端查看某个邮件标签页后，请求服务端把该分类里自己的邮件标为已读。
+ */
 public record MailMarkReadPacket(MailCategory category) implements CustomPacketPayload {
     public static final Type<MailMarkReadPacket> TYPE = new Type<>(
             Identifier.fromNamespaceAndPath(SimuKraft.MOD_ID, "mail_mark_read"));

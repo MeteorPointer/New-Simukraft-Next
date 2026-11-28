@@ -9,7 +9,9 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
-/** 第一次收到邮件后弹出的教程：先用聚光灯指出 HUD 左上角的邮箱，结束后打开邮件界面继续讲解。 */
+/**
+ * 第一次收到邮件后弹出的教程：先用聚光灯指出 HUD 左上角的邮箱，结束后打开邮件界面继续讲解。
+ */
 public final class MailTutorialScreen extends Screen {
     private static final int HOLE_PADDING = 3;
     private final MailTutorialOverlay overlay = new MailTutorialOverlay(List.of(
@@ -25,7 +27,9 @@ public final class MailTutorialScreen extends Screen {
         super(Component.translatable("tutorial.simukraft.mail.title"));
     }
 
-    /** 不画原版模糊背景，让 HUD 和世界透过遮罩显示。 */
+    /**
+     * 不画原版模糊背景，让 HUD 和世界透过遮罩显示。
+     */
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
     }
@@ -47,7 +51,9 @@ public final class MailTutorialScreen extends Screen {
         return advanceStep();
     }
 
-    /** 左键或推进键：讲完 HUD 部分后进入邮件界面继续讲解。 */
+    /**
+     * 左键或推进键：讲完 HUD 部分后进入邮件界面继续讲解。
+     */
     private boolean advanceStep() {
         if (overlay.advance()) {
             MailClientState.open(true);
@@ -73,7 +79,9 @@ public final class MailTutorialScreen extends Screen {
         super.onClose();
     }
 
-    /** ESC 由 keyPressed 处理为跳过；这里只防止其他路径静默关闭后反复弹出。 */
+    /**
+     * ESC 由 keyPressed 处理为跳过；这里只防止其他路径静默关闭后反复弹出。
+     */
     @Override
     public void onClose() {
         skip();

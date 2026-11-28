@@ -17,7 +17,8 @@ import java.util.List;
  * <p>ownContactKey 是玩家所属城市的名片 key，没有城市时为空串。
  */
 public record MailStatePacket(int unreadCount, boolean tutorialPending, String ownContactKey,
-                              List<MailMessageData> messages, List<MailContactData> contacts) implements CustomPacketPayload {
+                              List<MailMessageData> messages,
+                              List<MailContactData> contacts) implements CustomPacketPayload {
     private static final int MAX_MESSAGES = 320;
     private static final int MAX_CONTACTS = 96;
 

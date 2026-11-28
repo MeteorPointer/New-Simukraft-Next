@@ -32,7 +32,9 @@ public final class MailCitizenRequestService {
     private MailCitizenRequestService() {
     }
 
-    /** 诉求种类，按优先级排列。 */
+    /**
+     * 诉求种类，按优先级排列。
+     */
     private enum Kind {
         HOUSING(citizen -> citizen.homeId() == null),
         JOBS(CitizenService::isHireable),

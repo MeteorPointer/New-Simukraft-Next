@@ -11,9 +11,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 邮件、玩家教程状态和邮件调度游标的 SQLite 仓储。文本以组件 JSON 保存，由调用方在主线程序列化。 */
+/**
+ * 邮件、玩家教程状态和邮件调度游标的 SQLite 仓储。文本以组件 JSON 保存，由调用方在主线程序列化。
+ */
 public final class MailSqliteRepository {
-    /** 全服广播邮件使用的收件人 id。 */
+    /**
+     * 全服广播邮件使用的收件人 id。
+     */
     public static final String BROADCAST_RECIPIENT = "*";
 
     private final SimuSqliteDatabase database;
@@ -22,7 +26,9 @@ public final class MailSqliteRepository {
         this.database = database;
     }
 
-    /** 一行邮件的原始数据；组件字段仍是 JSON。 */
+    /**
+     * 一行邮件的原始数据；组件字段仍是 JSON。
+     */
     public record MailRow(long id, String recipientId, String category, String senderKey, String senderJson,
                           String subjectJson, String bodyJson, long gameTime, boolean unread, boolean outgoing) {
     }
@@ -64,7 +70,9 @@ public final class MailSqliteRepository {
         }
     }
 
-    /** 读取一个收件人最新的若干封邮件，按 id 从新到旧排列；失败返回 null。 */
+    /**
+     * 读取一个收件人最新的若干封邮件，按 id 从新到旧排列；失败返回 null。
+     */
     public List<MailRow> loadRecipient(String recipientId, int limit) {
         List<MailRow> rows = new ArrayList<>();
         try (Connection connection = database.borrowConnection();
@@ -123,7 +131,9 @@ public final class MailSqliteRepository {
         }
     }
 
-    /** 读取全部调度游标（周报周数、市民诉求冷却日）；失败返回 null。 */
+    /**
+     * 读取全部调度游标（周报周数、市民诉求冷却日）；失败返回 null。
+     */
     public Map<String, Long> loadSchedule() {
         Map<String, Long> values = new HashMap<>();
         try (Connection connection = database.borrowConnection();

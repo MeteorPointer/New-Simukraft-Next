@@ -2,11 +2,7 @@ package common.cn.nsimu.simukraft.network.mail;
 
 import common.cn.nsimu.simukraft.citizen.CitizenData;
 import common.cn.nsimu.simukraft.citizen.CitizenService;
-import common.cn.nsimu.simukraft.city.CityData;
-import common.cn.nsimu.simukraft.city.CityMemberData;
-import common.cn.nsimu.simukraft.city.CityPermissionLevel;
-import common.cn.nsimu.simukraft.city.CityPopulationStats;
-import common.cn.nsimu.simukraft.city.CityService;
+import common.cn.nsimu.simukraft.city.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -14,18 +10,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
-/** 按当前存档生成邮件右侧名片，并解析回复对象。仅本包使用。 */
+/**
+ * 按当前存档生成邮件右侧名片，并解析回复对象。仅本包使用。
+ */
 final class MailContactCards {
     private static final int MAX_CONTACTS = 48;
     private static final int ACK_VARIANTS = 3;
@@ -33,17 +22,22 @@ final class MailContactCards {
     private MailContactCards() {
     }
 
-    /** 一次批量同步内复用的城市名片和人口统计，避免广播时对每个玩家重复统计。 */
+    /**
+     * 一次批量同步内复用的城市名片和人口统计，避免广播时对每个玩家重复统计。
+     */
     static final class Cache {
         private final Map<String, MailContactData> cards = new HashMap<>();
         private final Map<UUID, CityLocation> playerCities = new HashMap<>();
     }
 
-    /** 回复对象和由回复触发的投递。 */
+    /**
+     * 回复对象和由回复触发的投递。
+     */
     record ReplyTarget(String key, List<Delivery> deliveries) {
     }
 
-    record Delivery(UUID recipientId, String senderKey, Component sender, Component subject, Component body, boolean unread) {
+    record Delivery(UUID recipientId, String senderKey, Component sender, Component subject, Component body,
+                    boolean unread) {
     }
 
     record CityLocation(ServerLevel level, CityData city) {
@@ -70,7 +64,9 @@ final class MailContactCards {
         return contacts;
     }
 
-    /** 校验回复对象：市民必须属于玩家城市，城市必须仍然存在，玩家发城市消息前必须有城市。 */
+    /**
+     * 校验回复对象：市民必须属于玩家城市，城市必须仍然存在，玩家发城市消息前必须有城市。
+     */
     static ReplyTarget resolveReplyTarget(ServerPlayer player, MailCategory category, String targetKey, String text) {
         if (targetKey == null) return null;
         MinecraftServer server = player.level().getServer();
@@ -79,7 +75,8 @@ final class MailContactCards {
         String ownKey = MailCategory.CITY_PREFIX + own.city().cityId();
         if (category == MailCategory.CITIZEN && targetKey.startsWith(MailCategory.CITIZEN_PREFIX)) {
             CitizenData citizen = citizen(server, targetKey);
-            if (citizen == null || citizen.dead() || !Objects.equals(citizen.cityId(), own.city().cityId())) return null;
+            if (citizen == null || citizen.dead() || !Objects.equals(citizen.cityId(), own.city().cityId()))
+                return null;
             int variant = Math.floorMod(Objects.hash(citizen.uuid(), text, server.overworld().getGameTime()), ACK_VARIANTS);
             return new ReplyTarget(targetKey, List.of(new Delivery(player.getUUID(), targetKey,
                     Component.literal(citizen.name()), Component.empty(),
@@ -102,7 +99,9 @@ final class MailContactCards {
         return null;
     }
 
-    /** 查找玩家所属城市及其维度；同一批同步内结果会缓存。 */
+    /**
+     * 查找玩家所属城市及其维度；同一批同步内结果会缓存。
+     */
     static CityLocation playerCity(MinecraftServer server, UUID playerId, Cache cache) {
         if (cache != null && cache.playerCities.containsKey(playerId)) return cache.playerCities.get(playerId);
         CityLocation found = null;
@@ -122,7 +121,8 @@ final class MailContactCards {
         if (cityId == null) return null;
         for (ServerLevel level : server.getAllLevels()) {
             Optional<CityData> city = CityService.findCity(level, cityId);
-            if (city.isPresent() && CityService.belongsToLevel(level, city.get())) return new CityLocation(level, city.get());
+            if (city.isPresent() && CityService.belongsToLevel(level, city.get()))
+                return new CityLocation(level, city.get());
         }
         return null;
     }
@@ -172,7 +172,8 @@ final class MailContactCards {
                 ? Component.translatable("mail.simukraft.contact.citizen.sick", Component.translatable(citizen.disease().translationKey()))
                 : Component.translatable("mail.simukraft.contact.citizen.well"));
         CityLocation city = citizen.cityId() == null ? null : city(server, MailCategory.CITY_PREFIX + citizen.cityId());
-        if (city != null) lines.add(Component.translatable("mail.simukraft.contact.citizen.city", city.city().cityName()));
+        if (city != null)
+            lines.add(Component.translatable("mail.simukraft.contact.citizen.city", city.city().cityName()));
         Identifier dimension = Identifier.tryParse(citizen.dimensionId());
         Optional<ChunkPos> chunk = citizen.lastKnownChunk();
         if (dimension == null || chunk.isEmpty()) {

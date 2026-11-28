@@ -1,11 +1,7 @@
 package common.cn.nsimu.simukraft.network.mail;
 
 import common.cn.nsimu.simukraft.SimuKraft;
-import common.cn.nsimu.simukraft.city.CityData;
-import common.cn.nsimu.simukraft.city.CityMemberData;
-import common.cn.nsimu.simukraft.city.CityPermissionLevel;
-import common.cn.nsimu.simukraft.city.CityService;
-import common.cn.nsimu.simukraft.city.FinanceTransactionData;
+import common.cn.nsimu.simukraft.city.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
@@ -29,7 +25,9 @@ public final class MailWeeklyReportService {
     private MailWeeklyReportService() {
     }
 
-    /** 每个服务端 tick 调用；只有周数变化时才遍历城市。 */
+    /**
+     * 每个服务端 tick 调用；只有周数变化时才遍历城市。
+     */
     public static void tick(MinecraftServer server) {
         if (server == null || server.overworld() == null) return;
         long week = server.overworld().getGameTime() / TICKS_PER_WEEK;
@@ -52,7 +50,9 @@ public final class MailWeeklyReportService {
         }
     }
 
-    /** 立即给执行者发送本周到目前为止的结算测试邮件，不改变周报去重状态。 */
+    /**
+     * 立即给执行者发送本周到目前为止的结算测试邮件，不改变周报去重状态。
+     */
     public static boolean sendTestReport(ServerPlayer player) {
         if (player == null) return false;
         ServerLevel level = player.level();
@@ -112,14 +112,17 @@ public final class MailWeeklyReportService {
         body.append("\n").append(Component.translatable(key, String.format(Locale.ROOT, "%.2f", amount)));
     }
 
-    /** 按流水原因归类支出；原因是注册在代码里的英文 id，不是显示名。 */
+    /**
+     * 按流水原因归类支出；原因是注册在代码里的英文 id，不是显示名。
+     */
     private static int expenseBucket(String reason) {
         String normalized = reason == null ? "" : reason.toLowerCase(Locale.ROOT);
         if (normalized.contains("construction") || normalized.contains("building") || normalized.contains("planner")
                 || normalized.contains("repair") || normalized.contains("claim_chunk")) return 0;
         if (normalized.contains("industrial") || normalized.contains("drill")) return 1;
         if (normalized.contains("logistic")) return 2;
-        if (normalized.contains("rent") || normalized.contains("residential") || normalized.contains("citizen")) return 3;
+        if (normalized.contains("rent") || normalized.contains("residential") || normalized.contains("citizen"))
+            return 3;
         if (normalized.contains("trade") || normalized.contains("market") || normalized.contains("commercial")
                 || normalized.contains("exchange")) return 4;
         return 5;

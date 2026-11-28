@@ -3,11 +3,7 @@ package client.cn.nsimu.simukraft.client.mail;
 import client.cn.nsimu.simukraft.client.city.map.SimuMapManager;
 import client.cn.nsimu.simukraft.client.city.map.SimuMapRegion;
 import com.mojang.blaze3d.platform.InputConstants;
-import common.cn.nsimu.simukraft.network.mail.MailCategory;
-import common.cn.nsimu.simukraft.network.mail.MailContactData;
-import common.cn.nsimu.simukraft.network.mail.MailMessageData;
-import common.cn.nsimu.simukraft.network.mail.MailReplyPacket;
-import common.cn.nsimu.simukraft.network.mail.MailStateService;
+import common.cn.nsimu.simukraft.network.mail.*;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -105,7 +101,9 @@ public final class MailScreen extends Screen {
         }
     }
 
-    /** 邮件时间显示为游戏天数，从第 1 天开始。 */
+    /**
+     * 邮件时间显示为游戏天数，从第 1 天开始。
+     */
     static Component dayLabel(long timestamp) {
         return Component.translatable("screen.simukraft.mail.day", Math.max(0L, timestamp) / 24000L + 1L);
     }
@@ -171,7 +169,9 @@ public final class MailScreen extends Screen {
         }
     }
 
-    /** 分类图标随窗口缩放，约等于列表宽度的四分之一，最小 16 像素保证清晰。 */
+    /**
+     * 分类图标随窗口缩放，约等于列表宽度的四分之一，最小 16 像素保证清晰。
+     */
     private int categoryIconSize() {
         return Math.max(16, layout.x(40));
     }
@@ -205,7 +205,9 @@ public final class MailScreen extends Screen {
         return new int[]{MailScreenLayout.LIST_THUMB[0], y, MailScreenLayout.LIST_THUMB[2], MailScreenLayout.LIST_THUMB[3]};
     }
 
-    /** 滑块位置反映当前查看的分类：第一个分类在最上面，最后一个在最下面。 */
+    /**
+     * 滑块位置反映当前查看的分类：第一个分类在最上面，最后一个在最下面。
+     */
     private float categoryFraction() {
         int last = TAB_CATEGORIES.length - 1;
         return last <= 0 ? 0.0F : activeTab / (float) last;
@@ -301,8 +303,8 @@ public final class MailScreen extends Screen {
             if (layout.contains(MailScreenLayout.CATEGORY_ROWS[i], mouseX, mouseY)) {
                 String name = TAB_CATEGORIES[i].name().toLowerCase(java.util.Locale.ROOT);
                 graphics.setComponentTooltipForNextFrame(font, List.of(
-                        Component.translatable("screen.simukraft.mail.tab." + name),
-                        Component.translatable("screen.simukraft.mail.tab." + name + ".desc").withStyle(ChatFormatting.GRAY)),
+                                Component.translatable("screen.simukraft.mail.tab." + name),
+                                Component.translatable("screen.simukraft.mail.tab." + name + ".desc").withStyle(ChatFormatting.GRAY)),
                         mouseX, mouseY);
                 return;
             }
@@ -363,7 +365,9 @@ public final class MailScreen extends Screen {
         graphics.text(font, caption, map[0] + 3, map[1] + map[3] - font.lineHeight - 2, 0xFFE6F2F2, true);
     }
 
-    /** 地图区块纹理由 SimuMapManager 动态上传，取到纹理位置后用无管线 blit 铺满目标矩形。 */
+    /**
+     * 地图区块纹理由 SimuMapManager 动态上传，取到纹理位置后用无管线 blit 铺满目标矩形。
+     */
     private void drawMapRegion(GuiGraphicsExtractor graphics, Identifier texture, double x, double y, double size) {
         int x0 = layout.x((int) Math.round(x));
         int y0 = layout.y((int) Math.round(y));
@@ -374,7 +378,9 @@ public final class MailScreen extends Screen {
 
     // ── 选择与回复对象 ─────────────────────────────────────────────────────────
 
-    /** 右侧名片显示的对象：先看玩家点选的，再看最近来信，最后退回本城。 */
+    /**
+     * 右侧名片显示的对象：先看玩家点选的，再看最近来信，最后退回本城。
+     */
     private String infoKey() {
         String selected = selectedKeys.get(category());
         if (selected != null) return selected;
@@ -388,7 +394,9 @@ public final class MailScreen extends Screen {
         return own.isEmpty() ? null : own;
     }
 
-    /** 当前标签的回复对象；没有可回复对象时返回 null，最终仍由服务端校验。 */
+    /**
+     * 当前标签的回复对象；没有可回复对象时返回 null，最终仍由服务端校验。
+     */
     private String replyTarget() {
         MailCategory category = category();
         String selected = selectedKeys.get(category);
@@ -532,7 +540,9 @@ public final class MailScreen extends Screen {
         return super.mouseClicked(event, doubleClick);
     }
 
-    /** 拖动左侧滑块：按位置换算成分类下标，直接切到最近的分类。 */
+    /**
+     * 拖动左侧滑块：按位置换算成分类下标，直接切到最近的分类。
+     */
     private void dragListThumbTo(double mouseY) {
         double trackStart = layout.y(MailScreenLayout.LIST_THUMB[1] + MailScreenLayout.LIST_THUMB[3] / 2);
         double travel = Math.max(1.0D, layout.y(MailScreenLayout.LIST_THUMB[1] + MailScreenLayout.LIST_THUMB_TRAVEL)

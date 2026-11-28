@@ -80,7 +80,9 @@ public final class SimuKraftClientConfigScreen {
         return footer;
     }
 
-    /** fontRow: 提供全客户端字体循环选择。 */
+    /**
+     * fontRow: 提供全客户端字体循环选择。
+     */
     private static UIElement fontRow(Screen parent) {
         return SimuKraftConfigWidgets.row(
                 Component.translatable("gui.simukraft.config.client.font"),

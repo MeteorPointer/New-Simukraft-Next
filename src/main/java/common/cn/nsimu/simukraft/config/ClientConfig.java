@@ -193,7 +193,9 @@ public final class ClientConfig {
         return Math.clamp(RTS_MOVE_HOLD_SECONDS.get(), 1, 10);
     }
 
-    /** fontName: 返回规范化的客户端字体名称；配置尚未加载时（游戏初始化早期画加载提示）用默认字体。 */
+    /**
+     * fontName: 返回规范化的客户端字体名称；配置尚未加载时（游戏初始化早期画加载提示）用默认字体。
+     */
     public static String fontName() {
         if (!SPEC.isLoaded()) {
             return DEFAULT_FONT;
@@ -311,7 +313,9 @@ public final class ClientConfig {
         };
     }
 
-    /** isFont: 校验字体配置值。 */
+    /**
+     * isFont: 校验字体配置值。
+     */
     private static boolean isFont(Object value) {
         if (!(value instanceof String string) || string.isBlank()) return false;
         return switch (string.toLowerCase(Locale.ROOT)) {

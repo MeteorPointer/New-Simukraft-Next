@@ -3,9 +3,12 @@ package client.cn.nsimu.simukraft.client;
 import common.cn.nsimu.simukraft.config.ClientConfig;
 import net.minecraft.resources.Identifier;
 
-/** 解析客户端字体配置。 */
+/**
+ * 解析客户端字体配置。
+ */
 public final class ClientFontSelection {
     private static final String[] FONT_NAMES = {"default", "heiti"};
+
     private ClientFontSelection() {
     }
 

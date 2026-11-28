@@ -25,7 +25,9 @@ public record MailMessageData(long id, MailCategory category, String senderKey, 
         return unread ? new MailMessageData(id, category, senderKey, sender, subject, body, timestamp, false, outgoing, broadcast) : this;
     }
 
-    /** 是否计入未读数：玩家自己的回复和全服广播不计入。 */
+    /**
+     * 是否计入未读数：玩家自己的回复和全服广播不计入。
+     */
     public boolean countsAsUnread() {
         return unread && !outgoing && !broadcast;
     }

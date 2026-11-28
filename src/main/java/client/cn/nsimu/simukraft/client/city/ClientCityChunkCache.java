@@ -72,6 +72,10 @@ public final class ClientCityChunkCache {
         return cache.allCityChunks.getOrDefault(cityId, Collections.emptySet());
     }
 
+    /**
+     * getAllCityChunks: 返回全量快照拷贝，仅供 UI 一次性读取；不得放进每帧或每 region 哈希路径，否则每次调用会拷贝所有城市的 chunk 集合。
+     * 逐 region 遍历请改走 {@link #getRegionChunkOwners(int, int)}，chunk 反查请走 {@link #getChunkOwner(long)}。
+     */
     public Map<UUID, Set<Long>> getAllCityChunks() {
         return snapshotChunks(currentScopeCache().allCityChunks);
     }
@@ -106,10 +110,19 @@ public final class ClientCityChunkCache {
     }
 
     /**
-     * getChunkOwners: 返回当前世界和维度领地权属的不可变快照，供客户端渲染批量读取。
+     * getChunkOwners: 返回当前世界和维度领地权属的不可变快照，供客户端渲染批量读取；单次调用即完成，不要放进每帧循环。
      */
     public Map<Long, UUID> getChunkOwners() {
         return Map.copyOf(currentScopeCache().chunkOwnerIndex);
+    }
+
+    /**
+     * getRegionChunkOwners: 返回指定 region 内已归属的 chunk→city 只读视图，用于 Xaero 高亮器等逐 region 哈希；调用方不得修改。
+     * <p>该视图直接引用内部索引，dataVersion 变更时会被整表替换；同一版本内稳定。
+     */
+    public Map<Long, UUID> getRegionChunkOwners(int regionX, int regionZ) {
+        long key = (long) regionX << 32 | Integer.toUnsignedLong(regionZ);
+        return currentScopeCache().regionOwnerIndex.getOrDefault(key, Map.of());
     }
 
     public int getDataVersion() {
@@ -157,6 +170,11 @@ public final class ClientCityChunkCache {
     private static final class ScopeCache {
         private final Map<UUID, Set<Long>> allCityChunks = new ConcurrentHashMap<>();
         private final Map<Long, UUID> chunkOwnerIndex = new ConcurrentHashMap<>();
+        /**
+         * regionKey → (chunkLong → cityId)。regionKey 与 {@link #regionHasOwnedChunks} 的编码一致。
+         * 由 {@link #rebuildChunkOwnerIndex} 整表重建，避免调用方做全量 snapshot 引发 O(regions × totalChunks) 拷贝。
+         */
+        private final Map<Long, Map<Long, UUID>> regionOwnerIndex = new ConcurrentHashMap<>();
         private final Map<UUID, CityCoreEntry> allCityCores = new ConcurrentHashMap<>();
         private final Map<Long, DistrictLabel> chunkDistricts = new ConcurrentHashMap<>();
         private volatile UUID currentCityId;
@@ -166,9 +184,16 @@ public final class ClientCityChunkCache {
         private void rebuildChunkOwnerIndex() {
             chunkOwnerIndex.clear();
             allCityChunks.forEach((cityId, chunks) -> chunks.forEach(chunk -> chunkOwnerIndex.put(chunk, cityId)));
+            // 逐 region 索引和 has-region 集合一次遍历完成，避免 Xaero 高亮器每 region 再走全量 snapshot。
+            Map<Long, Map<Long, UUID>> nextRegionOwners = new HashMap<>();
             Set<Long> regions = new HashSet<>();
-            chunkOwnerIndex.keySet().forEach(chunk -> regions.add(
-                    (long) (ChunkPos.getX(chunk) >> 5) << 32 | Integer.toUnsignedLong(ChunkPos.getZ(chunk) >> 5)));
+            chunkOwnerIndex.forEach((chunk, cityId) -> {
+                long regionKey = (long) (ChunkPos.getX(chunk) >> 5) << 32 | Integer.toUnsignedLong(ChunkPos.getZ(chunk) >> 5);
+                nextRegionOwners.computeIfAbsent(regionKey, key -> new ConcurrentHashMap<>()).put(chunk, cityId);
+                regions.add(regionKey);
+            });
+            regionOwnerIndex.clear();
+            nextRegionOwners.forEach((regionKey, owners) -> regionOwnerIndex.put(regionKey, Map.copyOf(owners)));
             regionWithChunks = Set.copyOf(regions);
             dataVersion++;
         }

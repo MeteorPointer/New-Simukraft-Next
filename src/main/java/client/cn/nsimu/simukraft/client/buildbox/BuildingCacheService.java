@@ -7,11 +7,13 @@ import common.cn.nsimu.simukraft.building.BuildingPackageCatalog;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class BuildingCacheService {
     private static final Map<String, List<BuildingMeta>> CACHE = new ConcurrentHashMap<>();
     private static volatile boolean initialized;
+    private static volatile boolean prewarmScheduled;
 
     private BuildingCacheService() {
     }
@@ -26,6 +28,25 @@ public final class BuildingCacheService {
             }
             reload();
         }
+    }
+
+    /**
+     * prewarmAsync: 将首次扫描 zip 建筑包提交到后台线程，避免 LoggingIn 在 Render 线程同步 reload 卡住画面。
+     * <p>后续 getBuildings() 会走 ensureInitialized，同锁下等后台完成；UI 打开时能接受短暂等待，而不是进世界瞬间卡。
+     */
+    public static void prewarmAsync() {
+        if (initialized || prewarmScheduled) {
+            return;
+        }
+        prewarmScheduled = true;
+        CompletableFuture.runAsync(() -> {
+            try {
+                ensureInitialized();
+            } catch (RuntimeException exception) {
+                prewarmScheduled = false;
+                SimuKraft.LOGGER.warn("Simukraft: Async building cache prewarm failed", exception);
+            }
+        });
     }
 
     /**

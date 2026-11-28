@@ -17,14 +17,14 @@ import client.cn.nsimu.simukraft.client.farmland.FarmlandHoverPreview;
 import client.cn.nsimu.simukraft.client.freecamera.FreeCameraManager;
 import client.cn.nsimu.simukraft.client.geology.GeologicalSurveyHintOverlay;
 import client.cn.nsimu.simukraft.client.input.SimuKraftKeyMappings;
+import client.cn.nsimu.simukraft.client.mail.MailClientState;
+import client.cn.nsimu.simukraft.client.mail.MailHudRenderer;
 import client.cn.nsimu.simukraft.client.path.NpcPathDebugRenderer;
 import client.cn.nsimu.simukraft.client.rts.RtsConstructionPreviewRenderer;
 import client.cn.nsimu.simukraft.client.rts.RtsMiniMapRenderer;
 import client.cn.nsimu.simukraft.client.rts.RtsSelectionManager;
 import client.cn.nsimu.simukraft.client.selection.TwoPointSelectionManager;
 import client.cn.nsimu.simukraft.client.toast.ClientInfoToast;
-import client.cn.nsimu.simukraft.client.mail.MailClientState;
-import client.cn.nsimu.simukraft.client.mail.MailHudRenderer;
 import common.cn.nsimu.simukraft.SimuKraft;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.Commands;
@@ -69,7 +69,8 @@ public final class ClientSetup {
     public static void onPlayerLoggedIn(ClientPlayerNetworkEvent.LoggingIn event) {
         SimuMapManager.shutdownIfPresent();
         SimuMapManager.getInstance().init();
-        BuildingCacheService.ensureInitialized();
+        // LoggingIn 在 Render 线程，zip 扫描改异步预热，避免首次进世界卡画面；UI 实际读取时再同锁等完成。
+        BuildingCacheService.prewarmAsync();
     }
 
     @SubscribeEvent

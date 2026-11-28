@@ -1,5 +1,6 @@
 package client.cn.nsimu.simukraft.client.compat.xaero;
 
+import client.cn.nsimu.simukraft.client.city.ClientCityChunkCache;
 import common.cn.nsimu.simukraft.SimuKraft;
 import net.minecraft.client.Minecraft;
 import xaero.map.MapProcessor;
@@ -67,17 +68,20 @@ public final class XaeroWorldMapIntegration {
     }
 
     /**
-     * refreshLoadedRegions: 将 Xaero 已加载的叶子地图区域重新加入刷新队列。
+     * refreshLoadedRegions: 仅将含城市领地的叶子地图区域重新加入刷新队列。
+     * <p>无领地的 region 重刷只会触发 Xaero 内部逐 chunk getColors 回调，而我们的 getColors 对无主 chunk 直接返回 null，白白重绘。
      */
     private static void refreshLoadedRegions(MapProcessor processor, MapDimension dimension) {
         if (processor == null || dimension == null) {
             return;
         }
+        ClientCityChunkCache cache = ClientCityChunkCache.getInstance();
         List<MapRegion> loadedMapRegions = new ArrayList<>();
         List<LeveledRegion<?>> loadedRegions = dimension.getLayeredMapRegions().getLoadedListUnsynced();
         synchronized (loadedRegions) {
             for (LeveledRegion<?> region : loadedRegions) {
-                if (region instanceof MapRegion mapRegion) {
+                if (region instanceof MapRegion mapRegion
+                        && cache.regionHasOwnedChunks(mapRegion.getRegionX(), mapRegion.getRegionZ())) {
                     loadedMapRegions.add(mapRegion);
                 }
             }

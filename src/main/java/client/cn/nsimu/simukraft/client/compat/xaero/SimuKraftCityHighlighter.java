@@ -9,10 +9,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import xaero.map.highlight.ChunkHighlighter;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class SimuKraftCityHighlighter extends ChunkHighlighter {
@@ -88,14 +85,14 @@ public final class SimuKraftCityHighlighter extends ChunkHighlighter {
     }
 
     private static int computeRegionHash(ClientCityChunkCache cache, int regionX, int regionZ) {
-        List<OwnedChunk> ownedChunks = new ArrayList<>();
-        cache.getAllCityChunks().forEach((cityId, chunks) -> {
-            for (long chunkLong : chunks) {
-                if ((ChunkPos.getX(chunkLong) >> 5) == regionX && (ChunkPos.getZ(chunkLong) >> 5) == regionZ) {
-                    ownedChunks.add(new OwnedChunk(cityId, chunkLong));
-                }
-            }
-        });
+        // 只遍历本 region 的 chunk→city 视图，不再全量快照所有城市的 chunk 集合；
+        // 旧写法会在每次 dataVersion 变更后，对每个已加载的 Xaero region 重走 O(totalChunks) 拷贝，进世界瞬间卡住渲染线程。
+        Map<Long, UUID> regionOwners = cache.getRegionChunkOwners(regionX, regionZ);
+        if (regionOwners.isEmpty()) {
+            return 0;
+        }
+        List<OwnedChunk> ownedChunks = new ArrayList<>(regionOwners.size());
+        regionOwners.forEach((chunkLong, cityId) -> ownedChunks.add(new OwnedChunk(cityId, chunkLong)));
         ownedChunks.sort(Comparator.comparingLong(OwnedChunk::chunkLong).thenComparing(chunk -> chunk.cityId().toString()));
         long hash = 1125899906842597L;
         for (OwnedChunk chunk : ownedChunks) {
